@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Login | RealEstatePortal{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-5">
+            <div class="form-card">
+                <h3 class="section-title text-center">Welcome Back</h3>
+                <p class="section-subtitle text-center">Log in to manage your listings or saved searches.</p>
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        {{ form.username }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Password</label>
+                        {{ form.password }}
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Login</button>
+                    <p class="text-center mt-3 mb-0">Don't have an account? <a href="{% url 'register' %}">Sign up</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

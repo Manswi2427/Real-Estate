@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_edit %}Edit{% else %}Add{% endif %} Property | RealEstatePortal{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
+            <div class="form-card">
+                <h3 class="section-title">{% if is_edit %}Edit Property{% else %}List a New Property{% endif %}</h3>
+                <p class="section-subtitle">Fill in the details below. Fields marked with an accurate address help buyers find you on the map.</p>
+
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Title</label>
+                        {{ form.title }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        {{ form.description }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Property Type</label>
+                            {{ form.property_type }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Listing Type</label>
+                            {{ form.listing_type }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Status</label>
+                            {{ form.status }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Price (₹)</label>
+                            {{ form.price }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Area (sqft)</label>
+                            {{ form.area_sqft }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label fw-semibold">Bedrooms</label>
+                            {{ form.bedrooms }}
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label fw-semibold">Bathrooms</label>
+                            {{ form.bathrooms }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Address</label>
+                        {{ form.address }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">City</label>
+                            {{ form.city }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">State</label>
+                            {{ form.state }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Zip Code</label>
+                            {{ form.zipcode }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Latitude <small class="text-muted">(geolocation)</small></label>
+                            {{ form.latitude }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Longitude <small class="text-muted">(geolocation)</small></label>
+                            {{ form.longitude }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Property Image</label>
+                        {{ form.image }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold d-block">Amenities</label>
+                        <div class="row">
+                            {% for checkbox in form.amenities %}
+                            <div class="col-md-4">{{ checkbox }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-4">
+                        {{ form.is_featured }}
+                        <label class="form-check-label fw-semibold">Mark as Featured</label>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary-custom px-4">
+                            {% if is_edit %}Save Changes{% else %}Publish Listing{% endif %}
+                        </button>
+                        <a href="{% if is_edit %}{% url 'property_detail' property.slug %}{% else %}{% url 'property_list' %}{% endif %}" class="btn btn-outline-custom px-4">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
