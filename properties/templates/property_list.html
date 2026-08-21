@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load property_extras %}
+{% block title %}Browse Properties | RealEstatePortal{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <h2 class="section-title">All Properties</h2>
+    <p class="section-subtitle">{{ total_results }} result{{ total_results|pluralize }} found</p>
+
+    <div class="row g-4">
+        <!-- Filter Sidebar -->
+        <div class="col-lg-3">
+            <div class="filter-sidebar">
+                <h5 class="mb-3"><i class="fa-solid fa-filter"></i> Filter Search</h5>
+                <form method="get">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Keyword</label>
+                        {{ form.keyword }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Property Type</label>
+                        {{ form.property_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Listing Type</label>
+                        {{ form.listing_type }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">City</label>
+                        {{ form.city }}
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Min Price</label>
+                            {{ form.min_price }}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Max Price</label>
+                            {{ form.max_price }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Bedrooms</label>
+                        {{ form.bedrooms }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold d-block">Amenities</label>
+                        <div style="max-height:180px; overflow-y:auto;">
+                            {{ form.amenities }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Sort By</label>
+                        {{ form.sort }}
+                    </div>
+                    <button type="submit" class="btn btn-primary-custom w-100">Apply Filters</button>
+                    <a href="{% url 'property_list' %}" class="btn btn-outline-custom w-100 mt-2">Clear</a>
+                </form>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="col-lg-9">
+            <div class="row g-4">
+                {% for property in properties %}
+                <div class="col-md-6 col-xl-4">
+                    <div class="property-card">
+                        <div class="img-wrap">
+                            <img src="{{ property|fallback_image }}" alt="{{ property.title }}">
+                            <span class="badge-listing">{{ property.get_listing_type_display }}</span>
+                            <span class="badge-status">{{ property.get_status_display }}</span>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="mb-1">{{ property.title }}</h5>
+                            <p class="property-meta mb-2"><i class="fa-solid fa-location-dot"></i>{{ property.city }}, {{ property.state }}</p>
+                            <p class="property-price mb-2">₹{{ property.price|floatformat:0 }}</p>
+                            <p class="property-meta mb-3">
+                                <i class="fa-solid fa-bed"></i>{{ property.bedrooms }} Beds &nbsp;
+                                <i class="fa-solid fa-bath"></i>{{ property.bathrooms }} Baths &nbsp;
+                                <i class="fa-solid fa-ruler-combined"></i>{{ property.area_sqft }} sqft
+                            </p>
+                            <a href="{% url 'property_detail' property.slug %}" class="btn btn-outline-custom w-100">View Details</a>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center text-muted py-5">
+                    <i class="fa-solid fa-magnifying-glass fa-2x mb-3"></i>
+                    <p>No properties match your filters. Try adjusting your search.</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav class="mt-5">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item"><a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
+                    {% endif %}
+                    {% for num in page_obj.paginator.page_range %}
+                    <li class="page-item {% if num == page_obj.number %}active{% endif %}">
+                        <a class="page-link" href="?{{ request.GET.urlencode }}&page={{ num }}">{{ num }}</a>
+                    </li>
+                    {% endfor %}
+                    {% if page_obj.has_next %}
+                    <li class="page-item"><a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}">Next</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

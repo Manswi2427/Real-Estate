@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Amenities | RealEstatePortal{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h2 class="section-title">Amenities</h2>
+            <p class="section-subtitle">Every feature that can be attached to a property listing.</p>
+        </div>
+        {% if user.is_authenticated and user.profile.is_agent %}
+        <a href="{% url 'amenity_create' %}" class="btn btn-primary-custom mb-3"><i class="fa-solid fa-plus"></i> Add Amenity</a>
+        {% endif %}
+    </div>
+
+    <div class="row g-4">
+        {% for amenity in amenities %}
+        <div class="col-md-3 col-sm-6">
+            <div class="amenity-card">
+                <i class="{{ amenity.icon }}"></i>
+                <h6 class="mb-1">{{ amenity.name }}</h6>
+                <small class="text-muted">{{ amenity.description }}</small>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center text-muted py-5">
+            <i class="fa-solid fa-list fa-2x mb-3"></i>
+            <p>No amenities added yet.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

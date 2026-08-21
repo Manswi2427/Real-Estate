@@ -1,0 +1,150 @@
+from django.conf import settings
+from django.db import models
+from django.urls import reverse
+from django.utils.text import slugify
+
+
+class Profile(models.Model):
+    """Extends the built-in User model with a role (Agent / Buyer)."""
+
+    class Role(models.TextChoices):
+        AGENT = 'AGENT', 'Agent'
+        BUYER = 'BUYER', 'Buyer'
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile'
+    )
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.BUYER)
+    phone = models.CharField(max_length=20, blank=True)
+    agency_name = models.CharField(max_length=150, blank=True, help_text="Agents only")
+
+    def __str__(self):
+        return f"{self.user.username} ({self.get_role_display()})"
+
+    @property
+    def is_agent(self):
+        return self.role == self.Role.AGENT
+
+    @property
+    def is_buyer(self):
+        return self.role == self.Role.BUYER
+
+
+class Amenity(models.Model):
+    """A feature/amenity that can belong to many properties (M2M)."""
+
+    name = models.CharField(max_length=100, unique=True)
+    icon = models.CharField(
+        max_length=50,
+        default='fa-solid fa-circle-check',
+        help_text="Font Awesome icon class, e.g. fa-solid fa-swimming-pool",
+    )
+    description = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name_plural = 'Amenities'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Property(models.Model):
+    """A real-estate listing. Linked to Amenity via PropertyAmenity (M2M through)."""
+
+    class PropertyType(models.TextChoices):
+        APARTMENT = 'APARTMENT', 'Apartment'
+        HOUSE = 'HOUSE', 'House'
+        VILLA = 'VILLA', 'Villa'
+        PLOT = 'PLOT', 'Plot / Land'
+        COMMERCIAL = 'COMMERCIAL', 'Commercial'
+
+    class ListingType(models.TextChoices):
+        SALE = 'SALE', 'For Sale'
+        RENT = 'RENT', 'For Rent'
+
+    class Status(models.TextChoices):
+        AVAILABLE = 'AVAILABLE', 'Available'
+        SOLD = 'SOLD', 'Sold'
+        RENTED = 'RENTED', 'Rented'
+        PENDING = 'PENDING', 'Pending'
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    description = models.TextField()
+    agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='properties',
+        limit_choices_to={'profile__role': 'AGENT'},
+    )
+
+    property_type = models.CharField(max_length=20, choices=PropertyType.choices)
+    listing_type = models.CharField(max_length=10, choices=ListingType.choices, default=ListingType.SALE)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.AVAILABLE)
+
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+    area_sqft = models.DecimalField(max_digits=10, decimal_places=2, help_text="Area in sq. ft.")
+    bedrooms = models.PositiveSmallIntegerField(default=0)
+    bathrooms = models.PositiveSmallIntegerField(default=0)
+
+    # Address / geolocation attributes
+    address = models.CharField(max_length=255)
+    city = models.CharField(max_length=100, db_index=True)
+    state = models.CharField(max_length=100, db_index=True)
+    zipcode = models.CharField(max_length=20, blank=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+
+    image = models.ImageField(upload_to='property_images/', blank=True, null=True)
+
+    amenities = models.ManyToManyField(
+        Amenity, through='PropertyAmenity', related_name='properties', blank=True
+    )
+
+    is_featured = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = 'Properties'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['city', 'property_type', 'listing_type']),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.title)
+            slug = base_slug
+            counter = 1
+            while Property.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse('property_detail', kwargs={'slug': self.slug})
+
+    @property
+    def has_geolocation(self):
+        return self.latitude is not None and self.longitude is not None
+
+
+class PropertyAmenity(models.Model):
+    """Explicit linking (through) table between Property and Amenity."""
+
+    property = models.ForeignKey(Property, on_delete=models.CASCADE, related_name='property_amenities')
+    amenity = models.ForeignKey(Amenity, on_delete=models.CASCADE, related_name='amenity_properties')
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('property', 'amenity')
+        verbose_name_plural = 'Property Amenities'
+
+    def __str__(self):
+        return f"{self.property.title} - {self.amenity.name}"

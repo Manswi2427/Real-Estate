@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load property_extras %}
+{% block title %}{{ property.title }} | RealEstatePortal{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'property_list' %}">Properties</a></li>
+            <li class="breadcrumb-item active">{{ property.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <img src="{{ property|fallback_image }}" class="detail-img mb-4" alt="{{ property.title }}">
+
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div>
+                    <h2 class="mb-1">{{ property.title }}</h2>
+                    <p class="property-meta"><i class="fa-solid fa-location-dot"></i> {{ property.address }}, {{ property.city }}, {{ property.state }} {{ property.zipcode }}</p>
+                </div>
+                <h3 class="property-price">₹{{ property.price|floatformat:0 }}</h3>
+            </div>
+
+            <div class="d-flex gap-2 mb-4">
+                <span class="badge-listing" style="position:static;">{{ property.get_listing_type_display }}</span>
+                <span class="badge-status" style="position:static;">{{ property.get_status_display }}</span>
+            </div>
+
+            <div class="row text-center mb-4">
+                <div class="col-3"><i class="fa-solid fa-bed fa-lg text-success"></i><p class="mb-0 mt-1">{{ property.bedrooms }} Beds</p></div>
+                <div class="col-3"><i class="fa-solid fa-bath fa-lg text-success"></i><p class="mb-0 mt-1">{{ property.bathrooms }} Baths</p></div>
+                <div class="col-3"><i class="fa-solid fa-ruler-combined fa-lg text-success"></i><p class="mb-0 mt-1">{{ property.area_sqft }} sqft</p></div>
+                <div class="col-3"><i class="fa-solid fa-building fa-lg text-success"></i><p class="mb-0 mt-1">{{ property.get_property_type_display }}</p></div>
+            </div>
+
+            <h5 class="mb-2">Description</h5>
+            <p class="text-muted">{{ property.description|linebreaks }}</p>
+
+            <h5 class="mt-4 mb-2">Amenities</h5>
+            <div>
+                {% for amenity in property.amenities.all %}
+                <span class="amenity-pill"><i class="{{ amenity.icon }}"></i>{{ amenity.name }}</span>
+                {% empty %}
+                <p class="text-muted">No amenities listed for this property.</p>
+                {% endfor %}
+            </div>
+
+            {% if property.has_geolocation %}
+            <h5 class="mt-4 mb-2">Location</h5>
+            <div class="ratio ratio-16x9 rounded" style="border-radius: 14px; overflow:hidden;">
+                <iframe
+                    src="https://www.google.com/maps?q={{ property.latitude }},{{ property.longitude }}&z=15&output=embed"
+                    style="border:0;" allowfullscreen loading="lazy">
+                </iframe>
+            </div>
+            {% endif %}
+
+            {% if is_owner %}
+            <div class="d-flex gap-2 mt-4">
+                <a href="{% url 'property_update' property.slug %}" class="btn btn-primary-custom"><i class="fa-solid fa-pen"></i> Edit Listing</a>
+                <a href="{% url 'property_delete' property.slug %}" class="btn btn-outline-danger"><i class="fa-solid fa-trash"></i> Delete Listing</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-4">
+            <div class="agent-card mb-4">
+                <div class="agent-avatar">{{ property.agent.username|slice:":1"|upper }}</div>
+                <h5 class="mb-0">{{ property.agent.get_full_name|default:property.agent.username }}</h5>
+                <p class="text-muted mb-2">{{ property.agent.profile.agency_name|default:"Independent Agent" }}</p>
+                {% if property.agent.profile.phone %}
+                <p class="mb-1"><i class="fa-solid fa-phone text-success"></i> {{ property.agent.profile.phone }}</p>
+                {% endif %}
+                <p class="mb-3"><i class="fa-solid fa-envelope text-success"></i> {{ property.agent.email }}</p>
+                <a href="mailto:{{ property.agent.email }}" class="btn btn-primary-custom w-100">Contact Agent</a>
+            </div>
+
+            {% if related_properties %}
+            <h6 class="mb-3">More in {{ property.city }}</h6>
+            {% for rp in related_properties %}
+            <a href="{% url 'property_detail' rp.slug %}" class="text-decoration-none text-dark">
+                <div class="d-flex gap-2 mb-3 align-items-center">
+                    <img src="{{ rp|fallback_image }}" style="width:70px;height:60px;object-fit:cover;border-radius:8px;">
+                    <div>
+                        <p class="mb-0 fw-semibold">{{ rp.title }}</p>
+                        <small class="text-muted">₹{{ rp.price|floatformat:0 }}</small>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

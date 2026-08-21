@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Sign Up | RealEstatePortal{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="form-card">
+                <h3 class="section-title text-center">Create Your Account</h3>
+                <p class="section-subtitle text-center">Join as a Buyer to browse, or an Agent to list properties.</p>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Username</label>
+                        {{ form.username }}
+                        {% if form.username.errors %}<small class="text-danger">{{ form.username.errors|striptags }}</small>{% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Email</label>
+                        {{ form.email }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold d-block">I am a...</label>
+                        <div class="d-flex gap-4">
+                            {% for radio in form.role %}
+                            <div class="form-check">
+                                {{ radio.tag }}
+                                <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Phone (optional)</label>
+                        {{ form.phone }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Agency Name <small class="text-muted">(agents only)</small></label>
+                        {{ form.agency_name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Password</label>
+                        {{ form.password1 }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Confirm Password</label>
+                        {{ form.password2 }}
+                    </div>
+
+                    <button type="submit" class="btn btn-primary-custom w-100">Create Account</button>
+                    <p class="text-center mt-3 mb-0">Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
