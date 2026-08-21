@@ -24,6 +24,7 @@
             <ul class="navbar-nav mx-auto">
                 <li class="nav-item"><a class="nav-link" href="{% url 'home' %}">Home</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'property_list' %}">Properties</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'property_advanced_search' %}">Advanced Search</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'amenity_list' %}">Amenities</a></li>
                 {% if user.is_authenticated and user.profile.is_agent %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'property_create' %}">Add Property</a></li>

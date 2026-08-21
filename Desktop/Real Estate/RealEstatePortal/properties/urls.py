@@ -12,7 +12,7 @@ urlpatterns = [
 
     # Properties
     path('properties/', views.property_list, name='property_list'),
-    path('api/properties/search/', views.property_search_api, name='property_search_api'),
+    path('properties/advanced-search/', views.advanced_search, name='property_advanced_search'),
     path('properties/add/', views.property_create, name='property_create'),
     path('properties/<slug:slug>/', views.property_detail, name='property_detail'),
     path('properties/<slug:slug>/edit/', views.property_update, name='property_update'),

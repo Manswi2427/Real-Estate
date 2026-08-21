@@ -6,7 +6,6 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import AmenityForm, PropertyFilterForm, PropertyForm, RegisterForm
@@ -96,128 +95,47 @@ def home(request):
     return render(request, 'home.html', context)
 
 
-def get_filtered_properties_queryset(filter_params):
-    """
-    Constructs a filtered queryset for properties based on filter_params.
-    """
-    qs = Property.objects.select_related('agent', 'agent__profile').prefetch_related('amenities')
-
-    keyword = filter_params.get('keyword')
-    if keyword:
-        qs = qs.filter(
-            Q(title__icontains=keyword) | Q(city__icontains=keyword) |
-            Q(address__icontains=keyword) | Q(state__icontains=keyword)
-        )
-
-    property_type = filter_params.get('property_type')
-    if property_type:
-        qs = qs.filter(property_type=property_type)
-
-    listing_type = filter_params.get('listing_type')
-    if listing_type:
-        qs = qs.filter(listing_type=listing_type)
-
-    city = filter_params.get('city')
-    if city:
-        qs = qs.filter(city__icontains=city)
-
-    min_price = filter_params.get('min_price')
-    if min_price is not None:
-        qs = qs.filter(price__gte=min_price)
-
-    max_price = filter_params.get('max_price')
-    if max_price is not None:
-        qs = qs.filter(price__lte=max_price)
-
-    min_area_sqft = filter_params.get('min_area_sqft')
-    if min_area_sqft is not None:
-        qs = qs.filter(area_sqft__gte=min_area_sqft)
-
-    max_area_sqft = filter_params.get('max_area_sqft')
-    if max_area_sqft is not None:
-        qs = qs.filter(area_sqft__lte=max_area_sqft)
-
-    bedrooms = filter_params.get('bedrooms')
-    if bedrooms:
-        qs = qs.filter(bedrooms__gte=int(bedrooms))
-
-    bathrooms = filter_params.get('bathrooms')
-    if bathrooms:
-        qs = qs.filter(bathrooms__gte=int(bathrooms))
-
-    amenities = filter_params.get('amenities')
-    if amenities:
-        for amenity in amenities:
-            qs = qs.filter(amenities=amenity)
-
-    sort = filter_params.get('sort') or '-created_at'
-    allowed_sorts = ['-created_at', 'price', '-price', '-area_sqft']
-    if sort not in allowed_sorts:
-        sort = '-created_at'
-    qs = qs.order_by(sort)
-
-    return qs.distinct()
-
-
-def serialize_property(prop, request=None):
-    """
-    Serializes a Property instance to a dictionary.
-    """
-    image_url = ''
-    if prop.image:
-        image_url = prop.image.url
-        if request:
-            image_url = request.build_absolute_uri(image_url)
-
-    return {
-        'id': prop.id,
-        'title': prop.title,
-        'slug': prop.slug,
-        'description': prop.description,
-        'property_type': prop.property_type,
-        'listing_type': prop.listing_type,
-        'status': prop.status,
-        'price': str(prop.price),
-        'area_sqft': str(prop.area_sqft),
-        'bedrooms': prop.bedrooms,
-        'bathrooms': prop.bathrooms,
-        'address': prop.address,
-        'city': prop.city,
-        'state': prop.state,
-        'zipcode': prop.zipcode,
-        'latitude': str(prop.latitude) if prop.latitude is not None else None,
-        'longitude': str(prop.longitude) if prop.longitude is not None else None,
-        'image_url': image_url,
-        'is_featured': prop.is_featured,
-        'created_at': prop.created_at.isoformat(),
-        'updated_at': prop.updated_at.isoformat(),
-        'agent': {
-            'id': prop.agent.id,
-            'username': prop.agent.username,
-            'email': prop.agent.email,
-            'phone': prop.agent.profile.phone if hasattr(prop.agent, 'profile') else '',
-            'agency_name': prop.agent.profile.agency_name if hasattr(prop.agent, 'profile') else '',
-        },
-        'amenities': [
-            {
-                'id': am.id,
-                'name': am.name,
-                'icon': am.icon,
-                'description': am.description,
-            }
-            for am in prop.amenities.all()
-        ]
-    }
-
-
 def property_list(request):
     form = PropertyFilterForm(request.GET or None)
+    qs = Property.objects.select_related('agent', 'agent__profile').prefetch_related('amenities')
 
     if form.is_valid():
-        qs = get_filtered_properties_queryset(form.cleaned_data)
+        data = form.cleaned_data
+        if data.get('keyword'):
+            kw = data['keyword']
+            qs = qs.filter(
+                Q(title__icontains=kw) | Q(city__icontains=kw) |
+                Q(address__icontains=kw) | Q(state__icontains=kw)
+            )
+        if data.get('property_type'):
+            qs = qs.filter(property_type=data['property_type'])
+        if data.get('listing_type'):
+            qs = qs.filter(listing_type=data['listing_type'])
+        if data.get('status'):
+            qs = qs.filter(status=data['status'])
+        if data.get('city'):
+            qs = qs.filter(city__icontains=data['city'])
+        if data.get('min_price') is not None:
+            qs = qs.filter(price__gte=data['min_price'])
+        if data.get('max_price') is not None:
+            qs = qs.filter(price__lte=data['max_price'])
+        if data.get('min_area') is not None:
+            qs = qs.filter(area_sqft__gte=data['min_area'])
+        if data.get('max_area') is not None:
+            qs = qs.filter(area_sqft__lte=data['max_area'])
+        if data.get('bedrooms'):
+            qs = qs.filter(bedrooms__gte=int(data['bedrooms']))
+        if data.get('bathrooms'):
+            qs = qs.filter(bathrooms__gte=int(data['bathrooms']))
+        if data.get('amenities'):
+            for amenity in data['amenities']:
+                qs = qs.filter(amenities=amenity)
+        sort = data.get('sort') or '-created_at'
+        qs = qs.order_by(sort)
     else:
-        qs = get_filtered_properties_queryset({})
+        qs = qs.order_by('-created_at')
 
+    qs = qs.distinct()
     paginator = Paginator(qs, 6)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -231,61 +149,9 @@ def property_list(request):
     return render(request, 'property_list.html', context)
 
 
-def property_search_api(request):
-    """
-    JSON API endpoint for searching properties.
-    Supports filtering by price range, square footage, bedrooms, bathrooms, and specific amenities.
-    """
-    # Parse request GET parameters into a structure suitable for validation by PropertyFilterForm
-    data = {}
-    for key in request.GET:
-        if key == 'amenities':
-            raw_amenities = request.GET.getlist('amenities')
-            amenities_ids = []
-            for val in raw_amenities:
-                if ',' in val:
-                    amenities_ids.extend([v.strip() for v in val.split(',') if v.strip()])
-                elif val.strip():
-                    amenities_ids.append(val.strip())
-            data['amenities'] = amenities_ids
-        else:
-            data[key] = request.GET.get(key)
-
-    form = PropertyFilterForm(data)
-    if form.is_valid():
-        qs = get_filtered_properties_queryset(form.cleaned_data)
-
-        # Basic pagination support
-        try:
-            limit = int(request.GET.get('limit', 10))
-            if limit < 1 or limit > 100:
-                limit = 10
-        except ValueError:
-            limit = 10
-
-        try:
-            offset = int(request.GET.get('offset', 0))
-            if offset < 0:
-                offset = 0
-        except ValueError:
-            offset = 0
-
-        total_count = qs.count()
-        qs_slice = qs[offset : offset + limit]
-
-        serialized_properties = [serialize_property(p, request) for p in qs_slice]
-
-        return JsonResponse({
-            'total_results': total_count,
-            'limit': limit,
-            'offset': offset,
-            'properties': serialized_properties
-        })
-    else:
-        return JsonResponse({
-            'error': 'Invalid filter parameters',
-            'details': form.errors
-        }, status=400)
+def advanced_search(request):
+    """Renders the dedicated Advanced Search page with AJAX functionality."""
+    return render(request, 'advanced_search.html')
 
 
 def property_detail(request, slug):
