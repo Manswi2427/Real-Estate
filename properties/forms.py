@@ -85,15 +85,29 @@ class PropertyFilterForm(forms.Form):
         choices=[('', 'Buy or Rent')] + list(Property.ListingType.choices),
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    status = forms.ChoiceField(
+        required=False,
+        choices=[('', 'Any Status')] + list(Property.Status.choices),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
     city = forms.CharField(required=False, widget=forms.TextInput(
         attrs={'class': 'form-control', 'placeholder': 'City'}))
     min_price = forms.DecimalField(required=False, widget=forms.NumberInput(
         attrs={'class': 'form-control', 'placeholder': 'Min Price'}))
     max_price = forms.DecimalField(required=False, widget=forms.NumberInput(
         attrs={'class': 'form-control', 'placeholder': 'Max Price'}))
+    min_area = forms.DecimalField(required=False, widget=forms.NumberInput(
+        attrs={'class': 'form-control', 'placeholder': 'Min Area (sqft)'}))
+    max_area = forms.DecimalField(required=False, widget=forms.NumberInput(
+        attrs={'class': 'form-control', 'placeholder': 'Max Area (sqft)'}))
     bedrooms = forms.ChoiceField(
         required=False,
         choices=[('', 'Any'), ('1', '1+'), ('2', '2+'), ('3', '3+'), ('4', '4+'), ('5', '5+')],
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    bathrooms = forms.ChoiceField(
+        required=False,
+        choices=[('', 'Any'), ('1', '1+'), ('2', '2+'), ('3', '3+'), ('4', '4+')],
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
     amenities = forms.ModelMultipleChoiceField(

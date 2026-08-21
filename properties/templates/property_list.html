@@ -26,6 +26,10 @@
                         {{ form.listing_type }}
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-semibold">Status</label>
+                        {{ form.status }}
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">City</label>
                         {{ form.city }}
                     </div>
@@ -39,9 +43,25 @@
                             {{ form.max_price }}
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Bedrooms</label>
-                        {{ form.bedrooms }}
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Min Area</label>
+                            {{ form.min_area }}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Max Area</label>
+                            {{ form.max_area }}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Bedrooms</label>
+                            {{ form.bedrooms }}
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Bathrooms</label>
+                            {{ form.bathrooms }}
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold d-block">Amenities</label>
@@ -73,11 +93,11 @@
                         <div class="card-body">
                             <h5 class="mb-1">{{ property.title }}</h5>
                             <p class="property-meta mb-2"><i class="fa-solid fa-location-dot"></i>{{ property.city }}, {{ property.state }}</p>
-                            <p class="property-price mb-2">₹{{ property.price|floatformat:0 }}</p>
+                            <p class="property-price mb-2">₹{{ property.price|format_inr }}</p>
                             <p class="property-meta mb-3">
                                 <i class="fa-solid fa-bed"></i>{{ property.bedrooms }} Beds &nbsp;
                                 <i class="fa-solid fa-bath"></i>{{ property.bathrooms }} Baths &nbsp;
-                                <i class="fa-solid fa-ruler-combined"></i>{{ property.area_sqft }} sqft
+                                <i class="fa-solid fa-ruler-combined"></i>{{ property.area_sqft|floatformat:0 }} sqft
                             </p>
                             <a href="{% url 'property_detail' property.slug %}" class="btn btn-outline-custom w-100">View Details</a>
                         </div>

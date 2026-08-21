@@ -17,7 +17,54 @@ FALLBACK_IMAGES = [
 @register.filter
 def fallback_image(property_obj):
     """Return the property's uploaded image, or a stable stock photo based on its id."""
-    if getattr(property_obj, "image", None):
+    if getattr(property_obj, "image", None) and hasattr(property_obj.image, "url"):
         return property_obj.image.url
     index = (property_obj.id or 0) % len(FALLBACK_IMAGES)
     return FALLBACK_IMAGES[index]
+
+
+@register.filter
+def format_inr(value):
+    """Format a number in Indian numbering system format (e.g. 25,00,000)."""
+    if value is None:
+        return ""
+    try:
+        val_int = int(float(value))
+    except (ValueError, TypeError):
+        return str(value)
+    
+    is_negative = val_int < 0
+    val_int = abs(val_int)
+    s = str(val_int)
+    if len(s) <= 3:
+        result = s
+    else:
+        last3 = s[-3:]
+        rest = s[:-3]
+        groups = []
+        while rest:
+            groups.insert(0, rest[-2:])
+            rest = rest[:-2]
+        result = ",".join(groups) + "," + last3
+    return f"-{result}" if is_negative else result
+
+
+@register.filter
+def price_label(value):
+    """Return a clean formatted string like '25 Lakh' or '1.2 Crore' for rupees."""
+    if value is None:
+        return ""
+    try:
+        val_float = float(value)
+    except (ValueError, TypeError):
+        return str(value)
+        
+    if val_float >= 10000000: # 1 Crore
+        cr = val_float / 10000000
+        return f"{cr:.2f} Cr" if cr != int(cr) else f"{int(cr)} Cr"
+    elif val_float >= 100000: # 1 Lakh
+        lk = val_float / 100000
+        return f"{lk:.2f} Lakh" if lk != int(lk) else f"{int(lk)} Lakh"
+    else:
+        return format_inr(val_float)
+

@@ -75,7 +75,7 @@
                 <div class="card-body">
                     <h5 class="mb-1">{{ property.title }}</h5>
                     <p class="property-meta mb-2"><i class="fa-solid fa-location-dot"></i>{{ property.city }}, {{ property.state }}</p>
-                    <p class="property-price mb-2">₹{{ property.price|floatformat:0 }}</p>
+                    <p class="property-price mb-2">₹{{ property.price|format_inr }}</p>
                     <p class="property-meta mb-3">
                         <i class="fa-solid fa-bed"></i>{{ property.bedrooms }} Beds &nbsp;
                         <i class="fa-solid fa-bath"></i>{{ property.bathrooms }} Baths &nbsp;

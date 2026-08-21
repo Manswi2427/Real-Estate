@@ -111,14 +111,22 @@ def property_list(request):
             qs = qs.filter(property_type=data['property_type'])
         if data.get('listing_type'):
             qs = qs.filter(listing_type=data['listing_type'])
+        if data.get('status'):
+            qs = qs.filter(status=data['status'])
         if data.get('city'):
             qs = qs.filter(city__icontains=data['city'])
         if data.get('min_price') is not None:
             qs = qs.filter(price__gte=data['min_price'])
         if data.get('max_price') is not None:
             qs = qs.filter(price__lte=data['max_price'])
+        if data.get('min_area') is not None:
+            qs = qs.filter(area_sqft__gte=data['min_area'])
+        if data.get('max_area') is not None:
+            qs = qs.filter(area_sqft__lte=data['max_area'])
         if data.get('bedrooms'):
             qs = qs.filter(bedrooms__gte=int(data['bedrooms']))
+        if data.get('bathrooms'):
+            qs = qs.filter(bathrooms__gte=int(data['bathrooms']))
         if data.get('amenities'):
             for amenity in data['amenities']:
                 qs = qs.filter(amenities=amenity)
@@ -139,6 +147,11 @@ def property_list(request):
         'total_results': paginator.count,
     }
     return render(request, 'property_list.html', context)
+
+
+def advanced_search(request):
+    """Renders the dedicated Advanced Search page with AJAX functionality."""
+    return render(request, 'advanced_search.html')
 
 
 def property_detail(request, slug):
