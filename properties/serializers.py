@@ -6,7 +6,7 @@ V3 adds PropertyImageSerializer and embeds the full gallery in PropertyDetailSer
 
 from rest_framework import serializers
 
-from .models import Amenity, Property, PropertyAmenity, PropertyImage
+from .models import Amenity, Message, Property, PropertyAmenity, PropertyImage
 
 
 class AmenitySerializer(serializers.ModelSerializer):
@@ -170,3 +170,40 @@ class PropertyDetailSerializer(PropertyListSerializer):
             'agency_name': profile.agency_name if profile else '',
             'role': profile.get_role_display() if profile else 'Agent',
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V4 – Message Serializer
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MessageSerializer(serializers.ModelSerializer):
+    """
+    V4 – Full message serializer including sender/receiver usernames,
+    optional property context, and thread metadata.
+    """
+
+    sender_username = serializers.CharField(source='sender.username', read_only=True)
+    receiver_username = serializers.CharField(source='receiver.username', read_only=True)
+    property_title = serializers.SerializerMethodField()
+    property_url = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = [
+            'id', 'subject', 'body',
+            'sender_username', 'receiver_username',
+            'property_title', 'property_url',
+            'is_read', 'sent_at',
+            'parent', 'reply_count',
+        ]
+        read_only_fields = ['id', 'sent_at', 'sender_username', 'receiver_username']
+
+    def get_property_title(self, obj):
+        return obj.property.title if obj.property else None
+
+    def get_property_url(self, obj):
+        return obj.property.get_absolute_url() if obj.property else None
+
+    def get_reply_count(self, obj):
+        return obj.replies.count()

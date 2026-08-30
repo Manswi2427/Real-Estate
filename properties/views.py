@@ -4,14 +4,15 @@ from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.models import User
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .forms import AmenityForm, PropertyFilterForm, PropertyForm, RegisterForm
-from .models import Amenity, Property, PropertyImage
+from .forms import AmenityForm, MessageComposeForm, MessageReplyForm, PropertyFilterForm, PropertyForm, RegisterForm
+from .models import Amenity, Message, Property, PropertyImage
 
 
 def agent_required(view_func):
@@ -330,3 +331,222 @@ def amenity_create(request):
     else:
         form = AmenityForm()
     return render(request, 'amenity_form.html', {'form': form})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V4 – Messaging System Views
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _get_unread_count(user):
+    """Helper: number of unread messages in user's inbox."""
+    if not user.is_authenticated:
+        return 0
+    return Message.objects.filter(receiver=user, is_read=False).count()
+
+
+@login_required
+def inbox_view(request):
+    """
+    Inbox – shows all messages received by the current user.
+    Groups them by 'thread root' so reply chains appear once.
+    Unread count badge shown per thread.
+    """
+    # All received messages, newest first
+    received = (
+        Message.objects
+        .filter(receiver=request.user)
+        .select_related('sender', 'property', 'parent')
+        .order_by('-sent_at')
+    )
+
+    # Build thread list: walk to root and deduplicate
+    seen_roots = set()
+    threads = []
+    for msg in received:
+        root = msg.get_thread_root()
+        if root.pk not in seen_roots:
+            seen_roots.add(root.pk)
+            # Count unread in this thread (messages where receiver=user)
+            unread = Message.objects.filter(
+                Q(pk=root.pk) | Q(parent=root),
+                receiver=request.user,
+                is_read=False,
+            ).count()
+            threads.append({'root': root, 'latest': msg, 'unread': unread})
+
+    paginator = Paginator(threads, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'inbox.html', {
+        'page_obj': page_obj,
+        'threads': page_obj.object_list,
+        'unread_total': _get_unread_count(request.user),
+    })
+
+
+@login_required
+def sent_view(request):
+    """Outbox – all messages sent by the current user."""
+    sent_msgs = (
+        Message.objects
+        .filter(sender=request.user)
+        .select_related('receiver', 'property')
+        .order_by('-sent_at')
+    )
+    paginator = Paginator(sent_msgs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    return render(request, 'sent.html', {
+        'page_obj': page_obj,
+        'sent_messages': page_obj.object_list,
+    })
+
+
+@login_required
+def compose_view(request):
+    """
+    Compose a new message.
+    Supports GET params: ?to=<username>&property_id=<id>
+    to pre-fill receiver and property context from a property detail page.
+    """
+    # Resolve receiver from ?to= param
+    receiver = None
+    to_username = request.GET.get('to') or request.POST.get('to_username')
+    if to_username:
+        receiver = get_object_or_404(User, username=to_username)
+
+    # Prevent messaging yourself
+    if receiver and receiver == request.user:
+        messages.error(request, "You cannot send a message to yourself.")
+        return redirect('inbox')
+
+    # Resolve optional property context
+    property_obj = None
+    property_id = request.GET.get('property_id') or request.POST.get('property_id')
+    if property_id:
+        try:
+            property_obj = Property.objects.get(pk=property_id)
+        except Property.DoesNotExist:
+            pass
+
+    if request.method == 'POST':
+        if not receiver:
+            messages.error(request, "Recipient not specified.")
+            return redirect('inbox')
+        form = MessageComposeForm(request.POST)
+        if form.is_valid():
+            msg = form.save(commit=False)
+            msg.sender = request.user
+            msg.receiver = receiver
+            msg.property = property_obj
+            msg.save()
+            messages.success(request, f"Message sent to {receiver.username}!")
+            return redirect('thread_view', pk=msg.pk)
+    else:
+        # Pre-fill subject if property context provided
+        initial = {}
+        if property_obj:
+            initial['subject'] = f"Enquiry about: {property_obj.title}"
+        form = MessageComposeForm(initial=initial)
+
+    return render(request, 'compose.html', {
+        'form': form,
+        'receiver': receiver,
+        'property_obj': property_obj,
+    })
+
+
+@login_required
+def thread_view(request, pk):
+    """
+    Full conversation thread.
+    Shows the root message + all its replies, oldest-first.
+    Marks all unread messages in this thread (where receiver=user) as read.
+    Also contains the inline reply form.
+    """
+    root_msg = get_object_or_404(
+        Message.select_related('sender', 'receiver', 'property')
+        if hasattr(Message, 'select_related') else Message.objects,
+        pk=pk,
+    )
+    # Re-fetch with select_related
+    root_msg = get_object_or_404(
+        Message.objects.select_related('sender', 'receiver', 'property'),
+        pk=pk,
+    )
+
+    # Security: only sender or receiver (or their participants) may view
+    if request.user not in (root_msg.sender, root_msg.receiver):
+        messages.error(request, "You do not have permission to view this conversation.")
+        return redirect('inbox')
+
+    # Get all replies in chronological order
+    reply_msgs = (
+        root_msg.replies
+        .select_related('sender', 'receiver')
+        .order_by('sent_at')
+    )
+
+    # Mark unread messages as read for the current user
+    Message.objects.filter(
+        Q(pk=root_msg.pk) | Q(parent=root_msg),
+        receiver=request.user,
+        is_read=False,
+    ).update(is_read=True)
+
+    reply_form = MessageReplyForm()
+
+    return render(request, 'thread.html', {
+        'root_msg': root_msg,
+        'reply_msgs': reply_msgs,
+        'reply_form': reply_form,
+        'other_user': root_msg.receiver if request.user == root_msg.sender else root_msg.sender,
+    })
+
+
+@require_POST
+@login_required
+def message_reply_view(request, pk):
+    """
+    POST endpoint to submit a reply to a thread.
+    pk = root message pk.
+    """
+    root_msg = get_object_or_404(Message, pk=pk)
+
+    if request.user not in (root_msg.sender, root_msg.receiver):
+        messages.error(request, "You do not have permission to reply to this conversation.")
+        return redirect('inbox')
+
+    form = MessageReplyForm(request.POST)
+    if form.is_valid():
+        # Determine the other party
+        other = root_msg.receiver if request.user == root_msg.sender else root_msg.sender
+        Message.objects.create(
+            sender=request.user,
+            receiver=other,
+            property=root_msg.property,
+            subject=f"Re: {root_msg.subject}",
+            body=form.cleaned_data['body'],
+            parent=root_msg,
+        )
+        messages.success(request, "Reply sent.")
+    else:
+        messages.error(request, "Could not send reply. Please try again.")
+
+    return redirect('thread_view', pk=pk)
+
+
+@require_POST
+@login_required
+def message_delete_view(request, pk):
+    """
+    Delete a message (sender or receiver can delete).
+    Only deletes root messages; replies are deleted by cascade when root is deleted.
+    """
+    msg = get_object_or_404(Message, pk=pk)
+    if request.user not in (msg.sender, msg.receiver):
+        messages.error(request, "Permission denied.")
+        return redirect('inbox')
+    msg.delete()
+    messages.success(request, "Message deleted.")
+    return redirect('inbox')

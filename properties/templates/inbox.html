@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}Inbox | RealEstatePortal{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── V4 Inbox Styles ──────────────────────────────────────────── */
+.msg-page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem;
+}
+.msg-page-title {
+    font-size: 1.7rem; font-weight: 800;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.msg-tabs {
+    display: flex; gap: 0.5rem;
+}
+.msg-tab {
+    padding: 0.45rem 1.1rem; border-radius: 50px; font-size: 0.85rem;
+    font-weight: 600; border: 2px solid rgba(34,197,94,0.3);
+    color: #22c55e; background: transparent; text-decoration: none;
+    transition: all 0.2s;
+}
+.msg-tab:hover, .msg-tab.active {
+    background: #22c55e; color: #fff; border-color: #22c55e;
+}
+.thread-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px; padding: 1.25rem 1.5rem;
+    margin-bottom: 0.75rem;
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+    cursor: pointer; position: relative;
+}
+.thread-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    border-color: rgba(34,197,94,0.35);
+}
+.thread-card.unread { border-left: 4px solid #22c55e; }
+.thread-card a { text-decoration: none; color: inherit; }
+.thread-card a::after { content:''; position:absolute; inset:0; }
+.thread-avatar {
+    width: 46px; height: 46px; border-radius: 50%;
+    background: linear-gradient(135deg, #22c55e, #15803d);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 1.1rem; color: #fff; flex-shrink: 0;
+}
+.thread-subject { font-weight: 700; font-size: 0.98rem; margin-bottom: 0.2rem; }
+.thread-preview { font-size: 0.83rem; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+.thread-meta { font-size: 0.78rem; color: #6b7280; white-space: nowrap; }
+.unread-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: #22c55e;
+    display: inline-block; margin-right: 4px;
+    box-shadow: 0 0 6px rgba(34,197,94,0.6);
+}
+.property-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(34,197,94,0.12); color: #22c55e;
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 50px; padding: 2px 10px; font-size: 0.73rem; font-weight: 600;
+    margin-top: 4px;
+}
+.empty-state {
+    text-align: center; padding: 4rem 1rem;
+}
+.empty-state .empty-icon {
+    font-size: 4rem; color: rgba(34,197,94,0.3); margin-bottom: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+
+    <div class="msg-page-header">
+        <div>
+            <h1 class="msg-page-title"><i class="fa-solid fa-inbox me-2"></i>Inbox</h1>
+            {% if unread_total > 0 %}
+            <p class="text-muted mb-0"><span class="badge bg-success">{{ unread_total }} unread</span> message{{ unread_total|pluralize }}</p>
+            {% else %}
+            <p class="text-muted mb-0">All caught up!</p>
+            {% endif %}
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <div class="msg-tabs">
+                <a href="{% url 'inbox' %}" class="msg-tab active">Inbox</a>
+                <a href="{% url 'sent_messages' %}" class="msg-tab">Sent</a>
+            </div>
+            <a href="{% url 'compose_message' %}" class="btn btn-primary-custom btn-sm">
+                <i class="fa-solid fa-pen-to-square me-1"></i>Compose
+            </a>
+        </div>
+    </div>
+
+    {% if threads %}
+    <div id="thread-list">
+        {% for item in threads %}
+        {% with item.root as msg %}
+        <div class="thread-card {% if item.unread > 0 %}unread{% endif %}">
+            <a href="{% url 'thread_view' msg.pk %}"></a>
+            <div class="d-flex align-items-center gap-3">
+                <div class="thread-avatar">{{ msg.sender.username|slice:":1"|upper }}</div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        {% if item.unread > 0 %}<span class="unread-dot"></span>{% endif %}
+                        <span class="thread-subject">{{ msg.subject }}</span>
+                        {% if item.unread > 0 %}
+                        <span class="badge bg-success" style="font-size:0.68rem;">{{ item.unread }} new</span>
+                        {% endif %}
+                    </div>
+                    <div class="thread-preview">
+                        <strong>{{ msg.sender.username }}</strong>: {{ msg.body|truncatechars:80 }}
+                    </div>
+                    {% if msg.property %}
+                    <div class="property-chip">
+                        <i class="fa-solid fa-house-chimney"></i>
+                        {{ msg.property.title|truncatechars:35 }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="thread-meta text-end">
+                    <div>{{ msg.sent_at|date:"d M Y" }}</div>
+                    <div class="mt-1">{{ msg.sent_at|time:"H:i" }}</div>
+                </div>
+            </div>
+        </div>
+        {% endwith %}
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-4" aria-label="Inbox pages">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon"><i class="fa-solid fa-envelope-open"></i></div>
+        <h4>Your inbox is empty</h4>
+        <p class="text-muted">When someone messages you, it will appear here.</p>
+        <a href="{% url 'property_list' %}" class="btn btn-outline-custom">Browse Properties</a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

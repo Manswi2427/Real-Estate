@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+{% block title %}{{ root_msg.subject }} | RealEstatePortal{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── V4 Thread Styles ──────────────────────────────────────────── */
+.thread-container {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 24px; overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column; min-height: 600px;
+}
+.thread-header {
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 1.25rem 2rem;
+}
+.thread-subject {
+    font-size: 1.25rem; font-weight: 800; color: #fff;
+    margin-bottom: 0.25rem;
+}
+.thread-body {
+    flex-grow: 1; padding: 2rem;
+    display: flex; flex-direction: column; gap: 1.5rem;
+    max-height: 480px; overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(34,197,94,0.3) transparent;
+}
+.thread-body::-webkit-scrollbar { width: 5px; }
+.thread-body::-webkit-scrollbar-thumb { background: rgba(34,197,94,0.3); border-radius: 5px; }
+
+/* Bubble styles */
+.message-bubble {
+    max-width: 75%; display: flex; flex-direction: column;
+}
+.message-bubble.incoming {
+    align-self: flex-start;
+}
+.message-bubble.outgoing {
+    align-self: flex-end;
+}
+.bubble-meta {
+    font-size: 0.72rem; color: #9ca3af; margin-bottom: 4px;
+    padding: 0 8px;
+}
+.message-bubble.outgoing .bubble-meta {
+    align-self: flex-end;
+}
+.bubble-content {
+    border-radius: 18px; padding: 0.9rem 1.25rem;
+    font-size: 0.88rem; line-height: 1.5;
+}
+.message-bubble.incoming .bubble-content {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.05);
+    color: #f3f4f6;
+    border-top-left-radius: 4px;
+}
+.message-bubble.outgoing .bubble-content {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #fff;
+    border-top-right-radius: 4px;
+    box-shadow: 0 4px 15px rgba(34,197,94,0.2);
+}
+.bubble-time {
+    font-size: 0.68rem; color: rgba(255,255,255,0.6); margin-top: 5px;
+    align-self: flex-end;
+}
+.message-bubble.incoming .bubble-time {
+    color: #9ca3af;
+}
+
+/* Thread footer / input */
+.thread-footer {
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid rgba(255,255,255,0.07);
+    padding: 1.25rem 2rem;
+}
+.property-context-banner {
+    background: rgba(34,197,94,0.06);
+    border: 1px solid rgba(34,197,94,0.15);
+    border-radius: 12px; padding: 0.75rem 1.25rem;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inbox' %}">Messages</a></li>
+            <li class="breadcrumb-item active">{{ root_msg.subject|truncatechars:30 }}</li>
+        </ol>
+    </nav>
+
+    <div class="thread-container">
+        
+        <!-- Thread Header -->
+        <div class="thread-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h1 class="thread-subject">{{ root_msg.subject }}</h1>
+                <div class="text-muted small">
+                    Conversation with <strong class="text-light">@{{ other_user.username }}</strong>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'inbox' %}" class="btn btn-outline-custom btn-sm">
+                    <i class="fa-solid fa-arrow-left me-1"></i>Back to Inbox
+                </a>
+                <form method="post" action="{% url 'message_delete' root_msg.pk %}" onsubmit="return confirm('Delete this conversation thread?');" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                        <i class="fa-solid fa-trash me-1"></i>Delete Thread
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Thread Body -->
+        <div class="thread-body" id="thread-body-el">
+            
+            <!-- Root message (First message) -->
+            <div class="message-bubble {% if root_msg.sender == request.user %}outgoing{% else %}incoming{% endif %}">
+                <span class="bubble-meta">
+                    <strong>{{ root_msg.sender.username }}</strong>
+                </span>
+                <div class="bubble-content">
+                    <div>{{ root_msg.body|linebreaksbr }}</div>
+                    <div class="bubble-time">{{ root_msg.sent_at|time:"H:i" }} — {{ root_msg.sent_at|date:"d M" }}</div>
+                </div>
+            </div>
+
+            <!-- Replies -->
+            {% for reply in reply_msgs %}
+            <div class="message-bubble {% if reply.sender == request.user %}outgoing{% else %}incoming{% endif %}">
+                <span class="bubble-meta">
+                    <strong>{{ reply.sender.username }}</strong>
+                </span>
+                <div class="bubble-content">
+                    <div>{{ reply.body|linebreaksbr }}</div>
+                    <div class="bubble-time">{{ reply.sent_at|time:"H:i" }} — {{ reply.sent_at|date:"d M" }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            
+        </div>
+
+        <!-- Thread Footer (Reply Form) -->
+        <div class="thread-footer">
+            {% if root_msg.property %}
+            <div class="property-context-banner flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2 text-success fw-semibold small">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Regarding property listing: <strong>{{ root_msg.property.title }}</strong></span>
+                </div>
+                <a href="{{ root_msg.property.get_absolute_url }}" class="btn btn-sm btn-outline-custom py-1" style="font-size:0.75rem;">
+                    View Property listing
+                </a>
+            </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'message_reply' root_msg.pk %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    {{ reply_form.body }}
+                </div>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary-custom px-4">
+                        <i class="fa-solid fa-paper-plane me-1"></i>Send Reply
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Auto scroll to bottom of message thread
+(function() {
+    const threadBody = document.getElementById('thread-body-el');
+    if (threadBody) {
+        threadBody.scrollTop = threadBody.scrollHeight;
+    }
+})();
+</script>
+{% endblock %}

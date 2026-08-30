@@ -1,5 +1,5 @@
 """
-API URL configuration for V2 – Advanced Search.
+API URL configuration for V2 – Advanced Search / V4 – Messaging.
 
 All endpoints are prefixed with /api/ (configured in the project urls.py).
 """
@@ -17,4 +17,10 @@ urlpatterns = [
 
     # Amenities
     path('amenities/', api_views.AmenityListAPIView.as_view(), name='api_amenity_list'),
+
+    # V4 – Messaging
+    path('messages/inbox/', api_views.InboxAPIView.as_view(), name='api_inbox'),
+    path('messages/compose/', api_views.ComposeAPIView.as_view(), name='api_compose'),
+    path('messages/unread-count/', api_views.UnreadCountAPIView.as_view(), name='api_unread_count'),
+    path('messages/<int:pk>/', api_views.ThreadAPIView.as_view(), name='api_thread'),
 ]

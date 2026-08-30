@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Amenity, Profile, Property, PropertyAmenity, PropertyImage
+from .models import Amenity, Message, Profile, Property, PropertyAmenity, PropertyImage
 
 
 class PropertyAmenityInline(admin.TabularInline):
@@ -72,3 +72,24 @@ class PropertyImageAdmin(admin.ModelAdmin):
 
 admin.site.register(PropertyAmenity)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V4 – Message Admin
+# ─────────────────────────────────────────────────────────────────────────────
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'sender', 'receiver', 'subject_short', 'property', 'is_read', 'has_parent', 'sent_at')
+    list_filter = ('is_read', 'sent_at')
+    search_fields = ('subject', 'body', 'sender__username', 'receiver__username')
+    readonly_fields = ('sent_at',)
+    raw_id_fields = ('sender', 'receiver', 'property', 'parent')
+    date_hierarchy = 'sent_at'
+
+    @admin.display(description='Subject')
+    def subject_short(self, obj):
+        return obj.subject[:60] + '…' if len(obj.subject) > 60 else obj.subject
+
+    @admin.display(description='Reply?', boolean=True)
+    def has_parent(self, obj):
+        return obj.parent_id is not None

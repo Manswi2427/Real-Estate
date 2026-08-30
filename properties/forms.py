@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 
-from .models import Amenity, Profile, Property
+from .models import Amenity, Message, Profile, Property
 
 
 # ─── Custom widget for multiple file upload ───────────────────────────────────
@@ -167,4 +167,42 @@ class PropertyFilterForm(forms.Form):
             ('-area_sqft', 'Largest Area'),
         ],
         widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+
+# ─ V4 – Messaging Forms ──────────────────────────────────────────────────────────────────────
+
+class MessageComposeForm(forms.ModelForm):
+    """
+    Used on the Compose page to send a new message.
+    The receiver and optional property are pre-filled via GET params
+    and hidden from the user (or displayed read-only as context).
+    """
+
+    class Meta:
+        model = Message
+        fields = ['subject', 'body']
+        widgets = {
+            'subject': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Message subject…',
+            }),
+            'body': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 6,
+                'placeholder': 'Write your message here…',
+            }),
+        }
+
+
+class MessageReplyForm(forms.Form):
+    """Lightweight reply form used inside a thread view."""
+
+    body = forms.CharField(
+        label='',
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 4,
+            'placeholder': 'Write your reply…',
+        }),
     )

@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
+from django.utils import timezone
 
 
 class Profile(models.Model):
@@ -223,4 +224,78 @@ class PropertyImage(models.Model):
         self.is_primary = True
         self.save(update_fields=['is_primary'])
         Property.objects.filter(pk=self.property_id).update(image=self.image.name)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V4 – Messaging System
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Message(models.Model):
+    """
+    Internal messaging between users (Buyer ↔ Agent).
+
+    Schema
+    ──────
+    sender   : FK(User)            – who sent the message
+    receiver : FK(User)            – who receives it
+    property : FK(Property, null)  – PropertyContext (optional)
+    subject  : CharField           – thread subject / title
+    body     : TextField           – message body
+    parent   : FK('self', null)    – reply threading
+    is_read  : BooleanField        – unread tracking
+    sent_at  : DateTimeField       – timestamp
+    """
+
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sent_messages',
+    )
+    receiver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='received_messages',
+    )
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='messages',
+        help_text='Optional property context for this message.',
+    )
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='replies',
+        help_text='Parent message for reply threading.',
+    )
+    is_read = models.BooleanField(default=False)
+    sent_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-sent_at']
+        indexes = [
+            models.Index(fields=['receiver', 'is_read']),
+            models.Index(fields=['sender', 'sent_at']),
+        ]
+
+    def __str__(self):
+        return f"[{self.sent_at:%d %b %Y}] {self.sender} → {self.receiver}: {self.subject[:40]}"
+
+    def get_thread_root(self):
+        """Walk up the parent chain to return the root message."""
+        msg = self
+        while msg.parent_id is not None:
+            msg = msg.parent
+        return msg
+
+    def mark_read(self):
+        if not self.is_read:
+            self.is_read = True
+            Message.objects.filter(pk=self.pk).update(is_read=True)
 

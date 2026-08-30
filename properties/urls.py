@@ -25,5 +25,13 @@ urlpatterns = [
     # Amenities
     path('amenities/', views.amenity_list, name='amenity_list'),
     path('amenities/add/', views.amenity_create, name='amenity_create'),
+
+    # V4 – Messaging System
+    path('messages/', views.inbox_view, name='inbox'),
+    path('messages/sent/', views.sent_view, name='sent_messages'),
+    path('messages/compose/', views.compose_view, name='compose_message'),
+    path('messages/<int:pk>/', views.thread_view, name='thread_view'),
+    path('messages/<int:pk>/reply/', views.message_reply_view, name='message_reply'),
+    path('messages/<int:pk>/delete/', views.message_delete_view, name='message_delete'),
 ]
 

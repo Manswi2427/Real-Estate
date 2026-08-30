@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block title %}Compose Message | RealEstatePortal{% endblock %}
+
+{% block extra_head %}
+<style>
+.msg-compose-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 20px; padding: 2rem;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+}
+.msg-compose-title {
+    font-size: 1.5rem; font-weight: 800;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 1.5rem;
+}
+.context-box {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;
+}
+.context-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #22c55e; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1.1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inbox' %}">Messages</a></li>
+            <li class="breadcrumb-item active">Compose</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="msg-compose-card">
+                <h2 class="msg-compose-title"><i class="fa-solid fa-pen-to-square me-2"></i>New Message</h2>
+
+                {% if receiver %}
+                <div class="context-box d-flex align-items-center gap-3">
+                    <div class="context-avatar">{{ receiver.username|slice:":1"|upper }}</div>
+                    <div>
+                        <div class="fw-semibold">To: {{ receiver.get_full_name|default:receiver.username }}</div>
+                        <div class="text-muted small">@{{ receiver.username }} ({{ receiver.profile.get_role_display|default:"Agent" }})</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if property_obj %}
+                <div class="context-box d-flex align-items-center gap-3" style="background: rgba(99,102,241,0.08); border-color: rgba(99,102,241,0.2);">
+                    <div class="context-avatar" style="background: #6366f1;"><i class="fa-solid fa-house-chimney"></i></div>
+                    <div>
+                        <div class="fw-semibold">Property Context: {{ property_obj.title }}</div>
+                        <div class="text-muted small">{{ property_obj.city }}, {{ property_obj.state }} — ₹{{ property_obj.price }}</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <form method="post" action="{% url 'compose_message' %}{% if receiver %}?to={{ receiver.username }}{% endif %}{% if property_obj %}&property_id={{ property_obj.pk }}{% endif %}">
+                    {% csrf_token %}
+                    
+                    {% if not receiver %}
+                    <div class="mb-3">
+                        <label for="to_username" class="form-label fw-semibold">Recipient Username</label>
+                        <input type="text" name="to_username" id="to_username" class="form-control" placeholder="Enter recipient username..." required>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="id_subject" class="form-label fw-semibold">Subject</label>
+                        {{ form.subject }}
+                        {% if form.subject.errors %}
+                        <div class="text-danger small mt-1">{{ form.subject.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_body" class="form-label fw-semibold">Message</label>
+                        {{ form.body }}
+                        {% if form.body.errors %}
+                        <div class="text-danger small mt-1">{{ form.body.errors }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary-custom px-4">Send Message</button>
+                        <a href="{% url 'inbox' %}" class="btn btn-outline-custom px-4">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

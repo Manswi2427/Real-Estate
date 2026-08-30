@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Sent Messages | RealEstatePortal{% endblock %}
+
+{% block extra_head %}
+<style>
+.msg-page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem;
+}
+.msg-page-title {
+    font-size: 1.7rem; font-weight: 800;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.msg-tab {
+    padding: 0.45rem 1.1rem; border-radius: 50px; font-size: 0.85rem;
+    font-weight: 600; border: 2px solid rgba(34,197,94,0.3);
+    color: #22c55e; background: transparent; text-decoration: none;
+    transition: all 0.2s;
+}
+.msg-tab:hover, .msg-tab.active {
+    background: #22c55e; color: #fff; border-color: #22c55e;
+}
+.sent-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px; padding: 1.25rem 1.5rem;
+    margin-bottom: 0.75rem; position: relative;
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+}
+.sent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    border-color: rgba(34,197,94,0.35);
+}
+.sent-card a { text-decoration: none; color: inherit; }
+.sent-card a::after { content:''; position:absolute; inset:0; }
+.recv-avatar {
+    width: 46px; height: 46px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 1.1rem; color: #fff; flex-shrink: 0;
+}
+.thread-subject { font-weight: 700; font-size: 0.98rem; margin-bottom: 0.2rem; }
+.thread-preview { font-size: 0.83rem; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+.thread-meta { font-size: 0.78rem; color: #6b7280; white-space: nowrap; }
+.property-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(34,197,94,0.12); color: #22c55e;
+    border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 50px; padding: 2px 10px; font-size: 0.73rem; font-weight: 600;
+    margin-top: 4px;
+}
+.read-badge { font-size: 0.7rem; }
+.empty-state { text-align: center; padding: 4rem 1rem; }
+.empty-state .empty-icon { font-size: 4rem; color: rgba(34,197,94,0.3); margin-bottom: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+
+    <div class="msg-page-header">
+        <div>
+            <h1 class="msg-page-title"><i class="fa-solid fa-paper-plane me-2"></i>Sent</h1>
+            <p class="text-muted mb-0">{{ page_obj.paginator.count }} message{{ page_obj.paginator.count|pluralize }} sent</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <div class="d-flex gap-2">
+                <a href="{% url 'inbox' %}" class="msg-tab">Inbox</a>
+                <a href="{% url 'sent_messages' %}" class="msg-tab active">Sent</a>
+            </div>
+            <a href="{% url 'compose_message' %}" class="btn btn-primary-custom btn-sm">
+                <i class="fa-solid fa-pen-to-square me-1"></i>Compose
+            </a>
+        </div>
+    </div>
+
+    {% if sent_messages %}
+    <div>
+        {% for msg in sent_messages %}
+        <div class="sent-card">
+            <a href="{% url 'thread_view' msg.pk %}"></a>
+            <div class="d-flex align-items-center gap-3">
+                <div class="recv-avatar">{{ msg.receiver.username|slice:":1"|upper }}</div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        <span class="thread-subject">{{ msg.subject }}</span>
+                        {% if msg.is_read %}
+                        <span class="badge bg-secondary read-badge">Read</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark read-badge">Unread</span>
+                        {% endif %}
+                    </div>
+                    <div class="thread-preview">
+                        <span class="text-muted">To: <strong>{{ msg.receiver.username }}</strong></span>
+                        — {{ msg.body|truncatechars:70 }}
+                    </div>
+                    {% if msg.property %}
+                    <div class="property-chip">
+                        <i class="fa-solid fa-house-chimney"></i>
+                        {{ msg.property.title|truncatechars:35 }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="thread-meta text-end">
+                    <div>{{ msg.sent_at|date:"d M Y" }}</div>
+                    <div class="mt-1">{{ msg.sent_at|time:"H:i" }}</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-4" aria-label="Sent pages">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon"><i class="fa-solid fa-paper-plane"></i></div>
+        <h4>No sent messages</h4>
+        <p class="text-muted">Messages you send will appear here.</p>
+        <a href="{% url 'compose_message' %}" class="btn btn-primary-custom">Compose Message</a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

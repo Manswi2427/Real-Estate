@@ -14,7 +14,7 @@ from django.test import TestCase, override_settings
 from django.test import Client
 from django.urls import reverse
 
-from .models import Amenity, Profile, Property, PropertyImage
+from .models import Amenity, Message, Profile, Property, PropertyImage
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -218,3 +218,165 @@ class GalleryAJAXViewTest(TestCase):
         url = reverse('gallery_image_delete', args=[self.img1.pk])
         response = self.client.post(url)
         self.assertEqual(response.status_code, 403)
+
+
+# ── V4 Messaging System Tests ──────────────────────────────────────────────────
+
+class MessagingSystemTest(TestCase):
+    """Tests for the V4 internal messaging system (UI and API)."""
+
+    def setUp(self):
+        # Create users
+        self.agent = User.objects.create_user(username='agent_m', password='password', email='agent@test.com')
+        self.agent_profile, _ = Profile.objects.get_or_create(user=self.agent)
+        self.agent_profile.role = Profile.Role.AGENT
+        self.agent_profile.save()
+
+        self.buyer = User.objects.create_user(username='buyer_m', password='password', email='buyer@test.com')
+        self.buyer_profile, _ = Profile.objects.get_or_create(user=self.buyer)
+        self.buyer_profile.role = Profile.Role.BUYER
+        self.buyer_profile.save()
+
+        self.other_user = User.objects.create_user(username='other_m', password='password')
+
+        # Create property context
+        self.prop = _make_property(self.agent)
+
+        self.client = Client()
+
+    def test_compose_message_flow(self):
+        """A buyer can compose a message to an agent about a property."""
+        self.client.login(username='buyer_m', password='password')
+        url = reverse('compose_message') + f"?to={self.agent.username}&property_id={self.prop.pk}"
+        
+        # Test GET compose page load
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"To: {self.agent.username}")
+        self.assertContains(response, self.prop.title)
+
+        # Test POST message submit
+        post_data = {
+            'subject': 'Interested in Test Villa',
+            'body': 'I would like to schedule a viewing.'
+        }
+        response = self.client.post(url, data=post_data)
+        
+        # Should redirect to thread view
+        self.assertEqual(response.status_code, 302)
+        
+        # Verify message created in DB
+        msg = Message.objects.filter(sender=self.buyer, receiver=self.agent).first()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.subject, 'Interested in Test Villa')
+        self.assertEqual(msg.property, self.prop)
+        self.assertFalse(msg.is_read)
+
+    def test_thread_details_and_read_status(self):
+        """Viewing a thread displays messages and marks received ones as read."""
+        msg = Message.objects.create(
+            sender=self.buyer,
+            receiver=self.agent,
+            property=self.prop,
+            subject='Question',
+            body='Hello Agent.'
+        )
+        self.assertFalse(msg.is_read)
+
+        # Viewing thread as buyer (sender) doesn't mark it read for agent
+        self.client.login(username='buyer_m', password='password')
+        url = reverse('thread_view', args=[msg.pk])
+        self.client.get(url)
+        msg.refresh_from_db()
+        self.assertFalse(msg.is_read)
+
+        # Viewing thread as agent (receiver) marks the message as read
+        self.client.login(username='agent_m', password='password')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Hello Agent.')
+        
+        msg.refresh_from_db()
+        self.assertTrue(msg.is_read)
+
+    def test_unauthorized_thread_access(self):
+        """A user cannot access a thread they are not part of."""
+        msg = Message.objects.create(
+            sender=self.buyer,
+            receiver=self.agent,
+            subject='Private convo',
+            body='Secret info.'
+        )
+        self.client.login(username='other_m', password='password')
+        url = reverse('thread_view', args=[msg.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)  # redirects with error message
+
+    def test_reply_flow(self):
+        """A user can reply to a message thread."""
+        msg = Message.objects.create(
+            sender=self.buyer,
+            receiver=self.agent,
+            subject='Greeting',
+            body='Hello agent.'
+        )
+
+        self.client.login(username='agent_m', password='password')
+        url = reverse('message_reply', args=[msg.pk])
+        response = self.client.post(url, data={'body': 'Hello back, buyer!'})
+        
+        self.assertEqual(response.status_code, 302)
+        
+        # Verify reply was created
+        reply = Message.objects.filter(parent=msg).first()
+        self.assertIsNotNone(reply)
+        self.assertEqual(reply.sender, self.agent)
+        self.assertEqual(reply.receiver, self.buyer)
+        self.assertEqual(reply.body, 'Hello back, buyer!')
+        self.assertEqual(reply.subject, 'Re: Greeting')
+
+    # API Tests
+    def test_api_inbox_and_unread_count(self):
+        """Tests DRF inbox and unread counts."""
+        self.client.login(username='agent_m', password='password')
+        
+        # No messages initially
+        res = self.client.get(reverse('api_unread_count'))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['unread_count'], 0)
+
+        # Create unread message
+        Message.objects.create(
+            sender=self.buyer,
+            receiver=self.agent,
+            subject='API Msg',
+            body='Hello via API'
+        )
+
+        # Unread count should be 1
+        res = self.client.get(reverse('api_unread_count'))
+        self.assertEqual(res.json()['unread_count'], 1)
+
+        # Inbox API check
+        inbox_res = self.client.get(reverse('api_inbox'))
+        self.assertEqual(inbox_res.status_code, 200)
+        self.assertEqual(len(inbox_res.json()['results']), 1)
+        self.assertEqual(inbox_res.json()['results'][0]['subject'], 'API Msg')
+
+    def test_api_compose_message(self):
+        """Tests sending a message via the REST API compose endpoint."""
+        self.client.login(username='buyer_m', password='password')
+        post_data = {
+            'receiver_username': self.agent.username,
+            'property_id': self.prop.pk,
+            'subject': 'API Inquiry',
+            'body': 'Inquiring via API.'
+        }
+        res = self.client.post(reverse('api_compose'), data=post_data, content_type='application/json')
+        self.assertEqual(res.status_code, 201)
+        
+        # Verify creation in DB
+        msg = Message.objects.filter(subject='API Inquiry').first()
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.sender, self.buyer)
+        self.assertEqual(msg.receiver, self.agent)
