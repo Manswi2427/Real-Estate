@@ -5,6 +5,32 @@ from django.contrib.auth.models import User
 from .models import Amenity, Profile, Property
 
 
+# ─── Custom widget for multiple file upload ───────────────────────────────────
+
+class MultipleFileInput(forms.ClearableFileInput):
+    """Allows selecting multiple files in a single <input type='file'>."""
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """A FileField that accepts multiple files."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('widget', MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        # data may be a list of files
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            result = [single_file_clean(d, initial) for d in data]
+        else:
+            result = single_file_clean(data, initial)
+        return result
+
+
+# ─── Register Form ────────────────────────────────────────────────────────────
+
 class RegisterForm(UserCreationForm):
     email = forms.EmailField(required=True)
     role = forms.ChoiceField(choices=Profile.Role.choices, widget=forms.RadioSelect)
@@ -32,11 +58,20 @@ class RegisterForm(UserCreationForm):
         return user
 
 
+# ─── Property Form ────────────────────────────────────────────────────────────
+
 class PropertyForm(forms.ModelForm):
     amenities = forms.ModelMultipleChoiceField(
         queryset=Amenity.objects.all(),
         widget=forms.CheckboxSelectMultiple,
         required=False,
+    )
+
+    # V3 – Multiple image upload
+    gallery_images = MultipleFileField(
+        required=False,
+        label='Upload Gallery Images',
+        help_text='Select multiple images at once. The first image becomes the primary thumbnail.',
     )
 
     class Meta:
@@ -54,10 +89,16 @@ class PropertyForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
-            if name != 'amenities':
+            if name not in ('amenities', 'gallery_images'):
                 existing = field.widget.attrs.get('class', '')
                 field.widget.attrs['class'] = (existing + ' form-control').strip()
+        # Make the legacy single-image field optional in V3
+        self.fields['image'].required = False
+        self.fields['image'].label = 'Cover Image (optional – overridden by gallery)'
+        self.fields['image'].help_text = 'If you upload gallery images, the primary gallery image is used instead.'
 
+
+# ─── Amenity Form ─────────────────────────────────────────────────────────────
 
 class AmenityForm(forms.ModelForm):
     class Meta:
@@ -69,6 +110,8 @@ class AmenityForm(forms.ModelForm):
             'description': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
+
+# ─── Property Filter Form ─────────────────────────────────────────────────────
 
 class PropertyFilterForm(forms.Form):
     """Advanced search / filter form used on the property list page."""

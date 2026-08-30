@@ -1,6 +1,123 @@
 {% extends 'base.html' %}
 {% block title %}{% if is_edit %}Edit{% else %}Add{% endif %} Property | RealEstatePortal{% endblock %}
 
+{% block extra_head %}
+<style>
+/* ── V3 Gallery Manager Styles ──────────────────────────────── */
+.gallery-upload-zone {
+    border: 2px dashed rgba(var(--primary-rgb, 34,197,94), 0.4);
+    border-radius: 16px;
+    padding: 2rem;
+    text-align: center;
+    background: rgba(var(--primary-rgb, 34,197,94), 0.04);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+.gallery-upload-zone:hover,
+.gallery-upload-zone.dragover {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.09);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(34,197,94,0.15);
+}
+.gallery-upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+}
+.gallery-upload-zone .upload-icon { font-size: 2.5rem; color: #22c55e; margin-bottom: 0.5rem; }
+.gallery-upload-zone .upload-title { font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem; }
+.gallery-upload-zone .upload-sub { font-size: 0.85rem; color: #6b7280; }
+
+/* Gallery grid */
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+    margin-top: 1.25rem;
+}
+.gallery-thumb {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+    aspect-ratio: 4/3;
+    background: #1a1a2e;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: default;
+}
+.gallery-thumb:hover { transform: scale(1.03); box-shadow: 0 8px 32px rgba(0,0,0,0.22); }
+.gallery-thumb img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: opacity 0.3s;
+}
+.gallery-thumb .thumb-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.25s;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 10px; gap: 8px;
+}
+.gallery-thumb:hover .thumb-overlay { opacity: 1; }
+.gallery-thumb .badge-primary-img {
+    position: absolute; top: 8px; left: 8px;
+    background: #22c55e; color: #fff;
+    font-size: 0.68rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 50px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(34,197,94,0.4);
+}
+.gallery-thumb .btn-thumb {
+    border: none; border-radius: 8px;
+    padding: 6px 10px; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+}
+.gallery-thumb .btn-set-primary {
+    background: rgba(34,197,94,0.9); color: #fff;
+}
+.gallery-thumb .btn-set-primary:hover { background: #16a34a; }
+.gallery-thumb .btn-delete-img {
+    background: rgba(239,68,68,0.9); color: #fff;
+}
+.gallery-thumb .btn-delete-img:hover { background: #dc2626; }
+.gallery-thumb.removing {
+    animation: thumbFadeOut 0.4s forwards;
+}
+@keyframes thumbFadeOut {
+    to { opacity: 0; transform: scale(0.8); }
+}
+.gallery-thumb.promoting img {
+    outline: 3px solid #22c55e;
+}
+
+/* Preview strip for newly selected files */
+.preview-strip {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 1rem;
+}
+.preview-strip .preview-item {
+    width: 90px; height: 75px; border-radius: 10px;
+    object-fit: cover; border: 2px solid rgba(34,197,94,0.35);
+    animation: previewIn 0.3s ease;
+}
+@keyframes previewIn {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Toast notifications */
+#gallery-toast {
+    position: fixed; bottom: 24px; right: 24px;
+    z-index: 9999; min-width: 240px;
+}
+#gallery-toast .toast-body { font-weight: 600; font-size: 0.88rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4 mb-5">
     <div class="row justify-content-center">
@@ -9,7 +126,7 @@
                 <h3 class="section-title">{% if is_edit %}Edit Property{% else %}List a New Property{% endif %}</h3>
                 <p class="section-subtitle">Fill in the details below. Fields marked with an accurate address help buyers find you on the map.</p>
 
-                <form method="post" enctype="multipart/form-data">
+                <form method="post" enctype="multipart/form-data" id="property-form">
                     {% csrf_token %}
 
                     <div class="mb-3">
@@ -87,10 +204,73 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Property Image</label>
+                    <!-- ══════════════ V3 GALLERY SECTION ══════════════ -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold d-block mb-1">
+                            <i class="fa-solid fa-images me-1 text-success"></i>
+                            Media Gallery
+                        </label>
+                        <p class="text-muted small mb-3">
+                            Upload multiple images. The first image becomes the <strong>primary thumbnail</strong>.
+                            {% if is_edit %}Use the gallery manager below to reorder, promote, or delete images.{% endif %}
+                        </p>
+
+                        <!-- Drag-and-drop upload zone -->
+                        <div class="gallery-upload-zone" id="upload-zone">
+                            {{ form.gallery_images }}
+                            <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                            <div class="upload-title">Drag & drop images here</div>
+                            <div class="upload-sub">or click anywhere to browse — JPG, PNG, WEBP supported</div>
+                        </div>
+
+                        <!-- Preview strip for newly selected files -->
+                        <div class="preview-strip" id="file-preview-strip"></div>
+                    </div>
+
+                    <!-- Legacy single image field (hidden, kept for backward compat) -->
+                    <div class="mb-3 d-none">
                         {{ form.image }}
                     </div>
+
+                    {% if is_edit and gallery_images %}
+                    <!-- ══ Existing Gallery Manager (edit mode only) ══ -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold mb-2">
+                            <i class="fa-solid fa-photo-film me-1 text-success"></i>
+                            Current Gallery
+                            <span class="badge bg-secondary ms-2">{{ gallery_images|length }} image{{ gallery_images|length|pluralize }}</span>
+                        </label>
+                        <div class="gallery-grid" id="gallery-grid">
+                            {% for img in gallery_images %}
+                            <div class="gallery-thumb" id="thumb-{{ img.pk }}" data-id="{{ img.pk }}">
+                                <img src="{{ img.image.url }}" alt="Gallery image {{ img.pk }}" loading="lazy">
+                                {% if img.is_primary %}
+                                <span class="badge-primary-img" id="primary-badge-{{ img.pk }}">
+                                    <i class="fa-solid fa-star me-1"></i>Primary
+                                </span>
+                                {% endif %}
+                                <div class="thumb-overlay">
+                                    {% if not img.is_primary %}
+                                    <button type="button"
+                                        class="btn-thumb btn-set-primary"
+                                        onclick="setPrimary({{ img.pk }}, this)"
+                                        title="Set as primary thumbnail">
+                                        <i class="fa-solid fa-star me-1"></i>Make Primary
+                                    </button>
+                                    {% endif %}
+                                    <button type="button"
+                                        class="btn-thumb btn-delete-img"
+                                        onclick="deleteImage({{ img.pk }}, this)"
+                                        title="Delete this image">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    <!-- ══════════════════════════════════════════════ -->
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold d-block">Amenities</label>
@@ -117,4 +297,171 @@
         </div>
     </div>
 </div>
+
+<!-- Toast notification -->
+<div id="gallery-toast" aria-live="polite" aria-atomic="true">
+    <div class="toast align-items-center text-white border-0" role="alert" id="toast-el">
+        <div class="d-flex">
+            <div class="toast-body" id="toast-message"></div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+// ── File preview strip ──────────────────────────────────────────────────────
+const fileInput = document.querySelector('#upload-zone input[type="file"]');
+const previewStrip = document.getElementById('file-preview-strip');
+const uploadZone = document.getElementById('upload-zone');
+
+if (fileInput) {
+    fileInput.addEventListener('change', function () {
+        previewStrip.innerHTML = '';
+        const files = [...this.files];
+        files.forEach(file => {
+            if (!file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.className = 'preview-item';
+                img.title = file.name;
+                previewStrip.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+        if (files.length > 0) {
+            uploadZone.querySelector('.upload-sub').textContent = `${files.length} file${files.length > 1 ? 's' : ''} selected`;
+        }
+    });
+
+    // Drag-and-drop classes
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); });
+}
+
+// ── Toast helper ────────────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+    const el = document.getElementById('toast-el');
+    const msgEl = document.getElementById('toast-message');
+    el.className = `toast align-items-center text-white border-0 bg-${type === 'success' ? 'success' : 'danger'}`;
+    msgEl.textContent = msg;
+    const bsToast = bootstrap.Toast.getOrCreateInstance(el, { delay: 3000 });
+    bsToast.show();
+}
+
+// ── Set primary image ────────────────────────────────────────────────────────
+async function setPrimary(imageId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>…';
+
+    try {
+        const res = await fetch(`/properties/images/${imageId}/set-primary/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            // Remove all existing primary badges
+            document.querySelectorAll('.badge-primary-img').forEach(b => b.remove());
+            // Remove all "Make Primary" buttons – we'll restore where needed
+            document.querySelectorAll('.btn-set-primary').forEach(b => b.remove());
+
+            // Add PRIMARY badge to new primary thumb
+            const newThumb = document.getElementById(`thumb-${imageId}`);
+            if (newThumb) {
+                const badge = document.createElement('span');
+                badge.className = 'badge-primary-img';
+                badge.id = `primary-badge-${imageId}`;
+                badge.innerHTML = '<i class="fa-solid fa-star me-1"></i>Primary';
+                newThumb.appendChild(badge);
+            }
+
+            // Restore "Make Primary" button on all other thumbs
+            document.querySelectorAll('.gallery-thumb').forEach(thumb => {
+                const id = parseInt(thumb.dataset.id);
+                if (id === imageId) return;
+                const overlay = thumb.querySelector('.thumb-overlay');
+                if (!overlay.querySelector('.btn-set-primary')) {
+                    const newBtn = document.createElement('button');
+                    newBtn.type = 'button';
+                    newBtn.className = 'btn-thumb btn-set-primary';
+                    newBtn.onclick = () => setPrimary(id, newBtn);
+                    newBtn.title = 'Set as primary thumbnail';
+                    newBtn.innerHTML = '<i class="fa-solid fa-star me-1"></i>Make Primary';
+                    overlay.prepend(newBtn);
+                }
+            });
+
+            showToast('Primary thumbnail updated ✓', 'success');
+        } else {
+            showToast(data.message || 'Failed to update primary image.', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-star me-1"></i>Make Primary';
+        }
+    } catch (err) {
+        showToast('Network error. Please try again.', 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-star me-1"></i>Make Primary';
+    }
+}
+
+// ── Delete image ─────────────────────────────────────────────────────────────
+async function deleteImage(imageId, btn) {
+    if (!confirm('Delete this image? This action cannot be undone.')) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    try {
+        const res = await fetch(`/properties/images/${imageId}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            const thumb = document.getElementById(`thumb-${imageId}`);
+            thumb.classList.add('removing');
+            thumb.addEventListener('animationend', () => thumb.remove());
+
+            // If it was primary and we have a new primary, update badge
+            if (data.was_primary && data.new_primary_url) {
+                // Find remaining thumbs
+                setTimeout(() => {
+                    const remaining = document.querySelectorAll('.gallery-thumb');
+                    if (remaining.length > 0) {
+                        const firstId = parseInt(remaining[0].dataset.id);
+                        document.querySelectorAll('.badge-primary-img').forEach(b => b.remove());
+                        const badge = document.createElement('span');
+                        badge.className = 'badge-primary-img';
+                        badge.id = `primary-badge-${firstId}`;
+                        badge.innerHTML = '<i class="fa-solid fa-star me-1"></i>Primary';
+                        remaining[0].appendChild(badge);
+                        // Remove Make Primary btn from newly promoted
+                        const makeBtn = remaining[0].querySelector('.btn-set-primary');
+                        if (makeBtn) makeBtn.remove();
+                    }
+                }, 500);
+            }
+
+            showToast('Image deleted.', 'success');
+        } else {
+            showToast(data.message || 'Failed to delete image.', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        }
+    } catch (err) {
+        showToast('Network error. Please try again.', 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+    }
+}
+</script>
 {% endblock %}

@@ -18,7 +18,12 @@ urlpatterns = [
     path('properties/<slug:slug>/edit/', views.property_update, name='property_update'),
     path('properties/<slug:slug>/delete/', views.property_delete, name='property_delete'),
 
+    # V3 – Gallery image management (AJAX)
+    path('properties/images/<int:image_id>/delete/', views.gallery_image_delete, name='gallery_image_delete'),
+    path('properties/images/<int:image_id>/set-primary/', views.gallery_image_set_primary, name='gallery_image_set_primary'),
+
     # Amenities
     path('amenities/', views.amenity_list, name='amenity_list'),
     path('amenities/add/', views.amenity_create, name='amenity_create'),
 ]
+

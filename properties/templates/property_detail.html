@@ -2,6 +2,94 @@
 {% load property_extras %}
 {% block title %}{{ property.title }} | RealEstatePortal{% endblock %}
 
+{% block extra_head %}
+<style>
+/* ── V3 Gallery Carousel ───────────────────────────────────────── */
+.gallery-hero {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #0f0f23;
+    margin-bottom: 1rem;
+    box-shadow: 0 12px 50px rgba(0,0,0,0.3);
+}
+.gallery-hero .main-image-wrap {
+    position: relative;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+}
+.gallery-hero .main-image {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    display: block;
+}
+.gallery-hero .main-image.fading {
+    opacity: 0;
+    transform: scale(1.04);
+}
+/* Arrows */
+.gallery-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.2);
+    color: #fff; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 10;
+    transition: background 0.2s, transform 0.2s;
+    backdrop-filter: blur(6px);
+}
+.gallery-arrow:hover { background: rgba(34,197,94,0.8); border-color: #22c55e; transform: translateY(-50%) scale(1.1); }
+.gallery-arrow.prev { left: 14px; }
+.gallery-arrow.next { right: 14px; }
+/* Image counter */
+.gallery-counter {
+    position: absolute; bottom: 14px; right: 16px;
+    background: rgba(0,0,0,0.55); color: #fff;
+    font-size: 0.78rem; font-weight: 700;
+    padding: 4px 12px; border-radius: 50px;
+    backdrop-filter: blur(4px);
+    letter-spacing: 0.5px;
+}
+/* Primary badge on hero */
+.gallery-primary-tag {
+    position: absolute; top: 14px; left: 14px;
+    background: #22c55e; color: #fff;
+    font-size: 0.7rem; font-weight: 700;
+    padding: 4px 12px; border-radius: 50px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 12px rgba(34,197,94,0.5);
+    display: none;
+}
+
+/* Thumbnail strip */
+.gallery-thumbs {
+    display: flex; gap: 10px;
+    overflow-x: auto;
+    padding: 4px 2px 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(34,197,94,0.4) transparent;
+}
+.gallery-thumbs::-webkit-scrollbar { height: 4px; }
+.gallery-thumbs::-webkit-scrollbar-thumb { background: rgba(34,197,94,0.4); border-radius: 4px; }
+.gallery-thumb-item {
+    flex: 0 0 90px; height: 68px;
+    border-radius: 10px; overflow: hidden;
+    cursor: pointer;
+    border: 2.5px solid transparent;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.gallery-thumb-item img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform 0.3s;
+}
+.gallery-thumb-item:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+.gallery-thumb-item:hover img { transform: scale(1.08); }
+.gallery-thumb-item.active { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.35); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4 mb-5">
     <nav aria-label="breadcrumb">
@@ -14,7 +102,53 @@
 
     <div class="row g-4">
         <div class="col-lg-8">
+
+            <!-- ══════════ V3 GALLERY CAROUSEL ══════════ -->
+            {% if gallery_images %}
+            <div class="gallery-hero mb-3">
+                <div class="main-image-wrap" id="gallery-main">
+                    {% with gallery_images.0 as first_img %}
+                    <img id="main-gallery-img"
+                         src="{{ first_img.image.url }}"
+                         alt="{{ property.title }}"
+                         class="main-image">
+                    {% endwith %}
+                    {% if gallery_images|length > 1 %}
+                    <button class="gallery-arrow prev" id="gallery-prev" aria-label="Previous image">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button class="gallery-arrow next" id="gallery-next" aria-label="Next image">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                    {% endif %}
+                    <span class="gallery-counter" id="gallery-counter">
+                        1 / {{ gallery_images|length }}
+                    </span>
+                    <span class="gallery-primary-tag" id="primary-tag">
+                        <i class="fa-solid fa-star me-1"></i>Primary
+                    </span>
+                </div>
+            </div>
+
+            {% if gallery_images|length > 1 %}
+            <div class="gallery-thumbs mb-4" id="gallery-thumbs">
+                {% for img in gallery_images %}
+                <div class="gallery-thumb-item {% if forloop.first %}active{% endif %}"
+                     data-index="{{ forloop.counter0 }}"
+                     data-src="{{ img.image.url }}"
+                     data-primary="{% if img.is_primary %}1{% else %}0{% endif %}"
+                     onclick="selectThumb(this)">
+                    <img src="{{ img.image.url }}" alt="Thumbnail {{ forloop.counter }}" loading="lazy">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <!-- Fallback single image (pre-V3 or no gallery images) -->
             <img src="{{ property|fallback_image }}" class="detail-img mb-4" alt="{{ property.title }}">
+            {% endif %}
+            <!-- ═══════════════════════════════════════════ -->
 
             <div class="d-flex justify-content-between align-items-start flex-wrap">
                 <div>
@@ -78,12 +212,28 @@
                 <a href="mailto:{{ property.agent.email }}" class="btn btn-primary-custom w-100">Contact Agent</a>
             </div>
 
+            {% if gallery_images %}
+            <!-- Gallery image count badge in sidebar -->
+            <div class="mb-4 p-3 rounded" style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);">
+                <p class="mb-0 text-success fw-semibold">
+                    <i class="fa-solid fa-images me-2"></i>
+                    {{ gallery_images|length }} photo{{ gallery_images|length|pluralize }} in gallery
+                </p>
+            </div>
+            {% endif %}
+
             {% if related_properties %}
             <h6 class="mb-3">More in {{ property.city }}</h6>
             {% for rp in related_properties %}
             <a href="{% url 'property_detail' rp.slug %}" class="text-decoration-none text-dark">
                 <div class="d-flex gap-2 mb-3 align-items-center">
+                    {% with rp.images.all as rp_imgs %}
+                    {% if rp_imgs %}
+                    <img src="{{ rp_imgs.0.image.url }}" style="width:70px;height:60px;object-fit:cover;border-radius:8px;">
+                    {% else %}
                     <img src="{{ rp|fallback_image }}" style="width:70px;height:60px;object-fit:cover;border-radius:8px;">
+                    {% endif %}
+                    {% endwith %}
                     <div>
                         <p class="mb-0 fw-semibold">{{ rp.title }}</p>
                         <small class="text-muted">₹{{ rp.price|format_inr }}</small>
@@ -95,4 +245,90 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if gallery_images and gallery_images|length > 1 %}
+<script>
+(function () {
+    // ── Gallery data from template ──────────────────────────────────────────
+    const images = [
+        {% for img in gallery_images %}
+        { src: "{{ img.image.url }}", primary: {{ img.is_primary|yesno:"true,false" }} }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    let current = 0;
+    const mainImg = document.getElementById('main-gallery-img');
+    const counter = document.getElementById('gallery-counter');
+    const primaryTag = document.getElementById('primary-tag');
+    const thumbItems = document.querySelectorAll('.gallery-thumb-item');
+
+    function goTo(index) {
+        if (index < 0) index = images.length - 1;
+        if (index >= images.length) index = 0;
+        current = index;
+
+        // Fade out
+        mainImg.classList.add('fading');
+        setTimeout(() => {
+            mainImg.src = images[current].src;
+            mainImg.onload = () => mainImg.classList.remove('fading');
+            // Failsafe: remove fading class after 500ms even if onload doesn't fire
+            setTimeout(() => mainImg.classList.remove('fading'), 500);
+        }, 200);
+
+        // Update counter
+        counter.textContent = `${current + 1} / ${images.length}`;
+
+        // Primary tag
+        if (images[current].primary) {
+            primaryTag.style.display = 'block';
+        } else {
+            primaryTag.style.display = 'none';
+        }
+
+        // Update thumbnails
+        thumbItems.forEach((t, i) => {
+            t.classList.toggle('active', i === current);
+            if (i === current) {
+                t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        });
+    }
+
+    // ── Arrow buttons ─────────────────────────────────────────────────────
+    document.getElementById('gallery-prev').addEventListener('click', () => goTo(current - 1));
+    document.getElementById('gallery-next').addEventListener('click', () => goTo(current + 1));
+
+    // ── Keyboard navigation ───────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowLeft') goTo(current - 1);
+        if (e.key === 'ArrowRight') goTo(current + 1);
+    });
+
+    // ── Thumbnail click (exposed globally for onclick attribute) ─────────
+    window.selectThumb = function (el) {
+        goTo(parseInt(el.dataset.index));
+    };
+
+    // ── Touch / swipe support ─────────────────────────────────────────────
+    let touchStartX = 0;
+    const mainWrap = document.getElementById('gallery-main');
+    mainWrap.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+    mainWrap.addEventListener('touchend', e => {
+        const diff = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(diff) > 50) goTo(diff > 0 ? current + 1 : current - 1);
+    });
+
+    // ── Show primary tag for first image if it is primary ────────────────
+    if (images[0] && images[0].primary) primaryTag.style.display = 'block';
+})();
+</script>
+{% else %}
+<script>
+// Expose selectThumb as no-op if gallery has only 1 or 0 images
+window.selectThumb = function () {};
+</script>
+{% endif %}
 {% endblock %}

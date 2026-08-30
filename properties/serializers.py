@@ -1,11 +1,12 @@
 """
-DRF Serializers for the Property API (V2 – Advanced Search).
+DRF Serializers for the Property API (V2 / V3).
 All prices are in Indian Rupees (₹).
+V3 adds PropertyImageSerializer and embeds the full gallery in PropertyDetailSerializer.
 """
 
 from rest_framework import serializers
 
-from .models import Amenity, Property, PropertyAmenity
+from .models import Amenity, Property, PropertyAmenity, PropertyImage
 
 
 class AmenitySerializer(serializers.ModelSerializer):
@@ -14,6 +15,25 @@ class AmenitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Amenity
         fields = ['id', 'name', 'icon', 'description']
+
+
+class PropertyImageSerializer(serializers.ModelSerializer):
+    """
+    V3 – Serializes a single gallery image.
+    Provides an absolute image_url and the is_primary flag.
+    """
+
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropertyImage
+        fields = ['id', 'image_url', 'caption', 'is_primary', 'created_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and hasattr(obj.image, 'url'):
+            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+        return None
 
 
 class PropertyListSerializer(serializers.ModelSerializer):
@@ -125,16 +145,19 @@ class PropertyListSerializer(serializers.ModelSerializer):
 class PropertyDetailSerializer(PropertyListSerializer):
     """
     Full-detail serializer with all fields including geolocation,
-    agent profile info, and complete description.
+    agent profile info, complete description, and V3 media gallery.
     """
 
     agent_detail = serializers.SerializerMethodField()
+    # V3 – Full image gallery (primary first)
+    images = PropertyImageSerializer(many=True, read_only=True)
 
     class Meta(PropertyListSerializer.Meta):
         fields = PropertyListSerializer.Meta.fields + [
             'description', 'zipcode',
             'latitude', 'longitude',
             'agent_detail', 'updated_at',
+            'images',
         ]
 
     def get_agent_detail(self, obj):

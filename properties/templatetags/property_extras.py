@@ -16,9 +16,24 @@ FALLBACK_IMAGES = [
 
 @register.filter
 def fallback_image(property_obj):
-    """Return the property's uploaded image, or a stable stock photo based on its id."""
-    if getattr(property_obj, "image", None) and hasattr(property_obj.image, "url"):
+    """
+    Return the property's primary gallery image URL (V3),
+    falling back to the legacy Property.image field,
+    or a stable stock photo based on its id.
+    """
+    # V3: check gallery images
+    try:
+        primary = property_obj.images.filter(is_primary=True).first()
+        if primary and primary.image:
+            return primary.image.url
+    except Exception:
+        pass
+
+    # Legacy single image field
+    if getattr(property_obj, "image", None) and hasattr(property_obj.image, "url") and property_obj.image:
         return property_obj.image.url
+
+    # Stable stock photo fallback
     index = (property_obj.id or 0) % len(FALLBACK_IMAGES)
     return FALLBACK_IMAGES[index]
 
@@ -32,7 +47,7 @@ def format_inr(value):
         val_int = int(float(value))
     except (ValueError, TypeError):
         return str(value)
-    
+
     is_negative = val_int < 0
     val_int = abs(val_int)
     s = str(val_int)
@@ -58,13 +73,12 @@ def price_label(value):
         val_float = float(value)
     except (ValueError, TypeError):
         return str(value)
-        
-    if val_float >= 10000000: # 1 Crore
+
+    if val_float >= 10000000:  # 1 Crore
         cr = val_float / 10000000
         return f"{cr:.2f} Cr" if cr != int(cr) else f"{int(cr)} Cr"
-    elif val_float >= 100000: # 1 Lakh
+    elif val_float >= 100000:  # 1 Lakh
         lk = val_float / 100000
         return f"{lk:.2f} Lakh" if lk != int(lk) else f"{int(lk)} Lakh"
     else:
         return format_inr(val_float)
-

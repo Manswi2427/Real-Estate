@@ -148,3 +148,79 @@ class PropertyAmenity(models.Model):
 
     def __str__(self):
         return f"{self.property.title} - {self.amenity.name}"
+
+
+class PropertyImage(models.Model):
+    """
+    V3 – Media Gallery: Stores multiple images for a single Property.
+    One image is designated as the 'primary' thumbnail; the rest are gallery items.
+    """
+
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name='images',
+    )
+    image = models.ImageField(upload_to='property_images/gallery/')
+    caption = models.CharField(max_length=200, blank=True)
+    is_primary = models.BooleanField(
+        default=False,
+        help_text='Designate this image as the primary thumbnail shown in listings.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Property Image'
+        verbose_name_plural = 'Property Images'
+        ordering = ['-is_primary', 'created_at']
+
+    def __str__(self):
+        flag = ' [PRIMARY]' if self.is_primary else ''
+        return f"{self.property.title} – Image #{self.pk}{flag}"
+
+    def save(self, *args, **kwargs):
+        """
+        If this image is being set as primary:
+          1. Unset is_primary on all other images of this property.
+          2. Sync the parent Property.image to point to this image file.
+        If no primary image exists yet, auto-promote the first image saved.
+        """
+        is_new = self.pk is None
+        if self.is_primary:
+            # Unset other primary images for this property (only when we have a pk to exclude)
+            if not is_new:
+                PropertyImage.objects.filter(
+                    property=self.property, is_primary=True
+                ).exclude(pk=self.pk).update(is_primary=False)
+
+        super().save(*args, **kwargs)
+
+        if self.is_primary:
+            # Also handle unset when brand-new (saved, so pk now exists)
+            PropertyImage.objects.filter(
+                property=self.property, is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+            # Sync parent Property.image to this image
+            Property.objects.filter(pk=self.property_id).update(image=self.image.name)
+
+        elif is_new:
+            # If this is the first image on the property, auto-promote it
+            if not PropertyImage.objects.filter(
+                property=self.property, is_primary=True
+            ).exclude(pk=self.pk).exists():
+                self.is_primary = True
+                PropertyImage.objects.filter(
+                    property=self.property, is_primary=True
+                ).exclude(pk=self.pk).update(is_primary=False)
+                PropertyImage.objects.filter(pk=self.pk).update(is_primary=True)
+                Property.objects.filter(pk=self.property_id).update(image=self.image.name)
+
+    def make_primary(self):
+        """Public helper to set this image as primary and sync everything."""
+        PropertyImage.objects.filter(
+            property=self.property, is_primary=True
+        ).update(is_primary=False)
+        self.is_primary = True
+        self.save(update_fields=['is_primary'])
+        Property.objects.filter(pk=self.property_id).update(image=self.image.name)
+

@@ -6,10 +6,12 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import AmenityForm, PropertyFilterForm, PropertyForm, RegisterForm
-from .models import Amenity, Property
+from .models import Amenity, Property, PropertyImage
 
 
 def agent_required(view_func):
@@ -24,6 +26,15 @@ def agent_required(view_func):
             return redirect('property_list')
         return view_func(request, *args, **kwargs)
     return _wrapped
+
+
+def _save_gallery_images(property_obj, files):
+    """
+    V3 helper – Create PropertyImage records from a list of uploaded files.
+    The first image saved triggers auto-promotion to primary (via model logic).
+    """
+    for f in files:
+        PropertyImage.objects.create(property=property_obj, image=f)
 
 
 # ---------- Auth Views ----------
@@ -81,7 +92,7 @@ def logout_view(request):
 def home(request):
     featured = Property.objects.filter(
         status=Property.Status.AVAILABLE
-    ).prefetch_related('amenities').order_by('-is_featured', '-created_at')[:6]
+    ).prefetch_related('amenities', 'images').order_by('-is_featured', '-created_at')[:6]
     total_properties = Property.objects.count()
     total_cities = Property.objects.values('city').distinct().count()
     total_agents = Property.objects.values('agent').distinct().count()
@@ -97,7 +108,7 @@ def home(request):
 
 def property_list(request):
     form = PropertyFilterForm(request.GET or None)
-    qs = Property.objects.select_related('agent', 'agent__profile').prefetch_related('amenities')
+    qs = Property.objects.select_related('agent', 'agent__profile').prefetch_related('amenities', 'images')
 
     if form.is_valid():
         data = form.cleaned_data
@@ -156,17 +167,22 @@ def advanced_search(request):
 
 def property_detail(request, slug):
     property_obj = get_object_or_404(
-        Property.objects.select_related('agent', 'agent__profile').prefetch_related('amenities'),
+        Property.objects.select_related('agent', 'agent__profile').prefetch_related('amenities', 'images'),
         slug=slug,
     )
     is_owner = request.user.is_authenticated and property_obj.agent_id == request.user.id
     related = Property.objects.filter(
         city=property_obj.city
-    ).exclude(pk=property_obj.pk)[:3]
+    ).exclude(pk=property_obj.pk).prefetch_related('images')[:3]
+
+    # V3 – ordered gallery images (primary first)
+    gallery_images = list(property_obj.images.order_by('-is_primary', 'created_at'))
+
     context = {
         'property': property_obj,
         'is_owner': is_owner,
         'related_properties': related,
+        'gallery_images': gallery_images,
     }
     return render(request, 'property_detail.html', context)
 
@@ -180,6 +196,12 @@ def property_create(request):
             new_property.agent = request.user
             new_property.save()
             form.save_m2m()
+
+            # V3 – Process gallery images
+            uploaded_files = request.FILES.getlist('gallery_images')
+            if uploaded_files:
+                _save_gallery_images(new_property, uploaded_files)
+
             messages.success(request, "Property listed successfully!")
             return redirect('property_detail', slug=new_property.slug)
     else:
@@ -198,11 +220,25 @@ def property_update(request, slug):
         form = PropertyForm(request.POST, request.FILES, instance=property_obj)
         if form.is_valid():
             form.save()
+
+            # V3 – Process newly uploaded gallery images
+            uploaded_files = request.FILES.getlist('gallery_images')
+            if uploaded_files:
+                _save_gallery_images(property_obj, uploaded_files)
+
             messages.success(request, "Property updated successfully!")
             return redirect('property_detail', slug=property_obj.slug)
     else:
         form = PropertyForm(instance=property_obj)
-    return render(request, 'property_form.html', {'form': form, 'is_edit': True, 'property': property_obj})
+
+    # V3 – Existing gallery for display in the edit form
+    gallery_images = list(property_obj.images.order_by('-is_primary', 'created_at'))
+    return render(request, 'property_form.html', {
+        'form': form,
+        'is_edit': True,
+        'property': property_obj,
+        'gallery_images': gallery_images,
+    })
 
 
 @agent_required
@@ -218,6 +254,65 @@ def property_delete(request, slug):
         return redirect('property_list')
     return render(request, 'property_confirm_delete.html', {'property': property_obj})
 
+
+# ---------- V3 – Gallery AJAX Views ----------
+
+@require_POST
+@login_required
+def gallery_image_delete(request, image_id):
+    """
+    AJAX endpoint – Deletes a gallery image.
+    Only the property owner (agent) can delete.
+    Returns JSON {success, message, new_primary_url?}.
+    """
+    img = get_object_or_404(PropertyImage, pk=image_id)
+    prop = img.property
+
+    if prop.agent_id != request.user.id:
+        return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
+
+    was_primary = img.is_primary
+    img.delete()  # signal will elect next primary if needed
+
+    # Refresh property to get updated image field
+    prop.refresh_from_db()
+    new_primary_url = None
+    if prop.image:
+        new_primary_url = prop.image.url
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Image deleted.',
+        'was_primary': was_primary,
+        'new_primary_url': new_primary_url,
+    })
+
+
+@require_POST
+@login_required
+def gallery_image_set_primary(request, image_id):
+    """
+    AJAX endpoint – Sets a gallery image as the primary thumbnail.
+    Only the property owner (agent) can change this.
+    Returns JSON {success, message, image_url}.
+    """
+    img = get_object_or_404(PropertyImage, pk=image_id)
+    prop = img.property
+
+    if prop.agent_id != request.user.id:
+        return JsonResponse({'success': False, 'message': 'Permission denied.'}, status=403)
+
+    img.make_primary()
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Primary image updated.',
+        'image_url': img.image.url,
+        'image_id': img.pk,
+    })
+
+
+# ---------- Amenity Views ----------
 
 def amenity_list(request):
     amenities = Amenity.objects.all().order_by('name')
