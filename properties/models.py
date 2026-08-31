@@ -299,3 +299,106 @@ class Message(models.Model):
             self.is_read = True
             Message.objects.filter(pk=self.pk).update(is_read=True)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V5 – Saved Searches & Alerts
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SavedSearch(models.Model):
+    """
+    Stores search filter criteria saved by a Buyer user.
+    Used to match new property listings and notify them via alerts.
+    """
+
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='saved_searches',
+    )
+    name = models.CharField(max_length=150, help_text="A friendly name for this saved search.")
+
+    # Filter criteria
+    keyword = models.CharField(max_length=200, blank=True)
+    property_type = models.CharField(max_length=20, blank=True)
+    listing_type = models.CharField(max_length=10, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    
+    min_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    max_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    
+    min_area = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    max_area = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    bedrooms = models.PositiveSmallIntegerField(null=True, blank=True)
+    bathrooms = models.PositiveSmallIntegerField(null=True, blank=True)
+    
+    amenities = models.ManyToManyField(Amenity, blank=True, related_name='saved_searches')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_notified_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Saved Search'
+        verbose_name_plural = 'Saved Searches'
+
+    def __str__(self):
+        return f"{self.buyer.username} – {self.name}"
+
+    def matches_property(self, prop):
+        """
+        Evaluate if a Property instance matches the search criteria.
+        """
+        # Keyword search
+        if self.keyword:
+            kw = self.keyword.lower()
+            in_title = kw in prop.title.lower()
+            in_desc = kw in prop.description.lower()
+            in_addr = kw in prop.address.lower()
+            in_city = kw in prop.city.lower()
+            in_state = kw in prop.state.lower()
+            if not (in_title or in_desc or in_addr or in_city or in_state):
+                return False
+
+        # Property type, listing type
+        if self.property_type and prop.property_type != self.property_type:
+            return False
+        if self.listing_type and prop.listing_type != self.listing_type:
+            return False
+
+        # City / State (case-insensitive contains / match)
+        if self.city and self.city.lower() not in prop.city.lower():
+            return False
+        if self.state and self.state.lower() not in prop.state.lower():
+            return False
+
+        # Price limits
+        if self.min_price is not None and prop.price < self.min_price:
+            return False
+        if self.max_price is not None and prop.price > self.max_price:
+            return False
+
+        # Area limits
+        if self.min_area is not None and prop.area_sqft < self.min_area:
+            return False
+        if self.max_area is not None and prop.area_sqft > self.max_area:
+            return False
+
+        # Room minimum counts
+        if self.bedrooms is not None and prop.bedrooms < self.bedrooms:
+            return False
+        if self.bathrooms is not None and prop.bathrooms < self.bathrooms:
+            return False
+
+        # Amenity checks: property must have ALL the selected amenities in the search criteria
+        if self.pk:
+            search_amenity_ids = set(self.amenities.values_list('id', flat=True))
+            if search_amenity_ids:
+                prop_amenity_ids = set(prop.amenities.values_list('id', flat=True))
+                if not search_amenity_ids.issubset(prop_amenity_ids):
+                    return False
+
+        return True
+
+

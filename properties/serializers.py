@@ -6,7 +6,7 @@ V3 adds PropertyImageSerializer and embeds the full gallery in PropertyDetailSer
 
 from rest_framework import serializers
 
-from .models import Amenity, Message, Property, PropertyAmenity, PropertyImage
+from .models import Amenity, Message, Property, PropertyAmenity, PropertyImage, SavedSearch
 
 
 class AmenitySerializer(serializers.ModelSerializer):
@@ -207,3 +207,26 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_reply_count(self, obj):
         return obj.replies.count()
+
+
+# V5 - Saved Search Serializer
+
+class SavedSearchSerializer(serializers.ModelSerializer):
+    """V5 - Serializes buyer saved search criteria."""
+
+    amenities = serializers.SlugRelatedField(
+        many=True,
+        queryset=Amenity.objects.all(),
+        slug_field='name',
+        required=False
+    )
+
+    class Meta:
+        model = SavedSearch
+        fields = [
+            'id', 'name', 'keyword', 'property_type', 'listing_type',
+            'city', 'state', 'min_price', 'max_price',
+            'min_area', 'max_area', 'bedrooms', 'bathrooms',
+            'amenities', 'created_at', 'last_notified_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'last_notified_at']

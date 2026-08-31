@@ -37,6 +37,12 @@
                               id="nav-unread-badge" style="font-size:0.65rem; display:none;">0</span>
                     </a>
                 </li>
+                {% if user.profile.is_buyer %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'saved_searches' %}"><i class="fas fa-bell me-1"></i>Saved Searches</a></li>
+                {% endif %}
+                {% if user.profile.is_agent %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'bulk_upload' %}"><i class="fas fa-file-csv me-1"></i>Bulk Upload</a></li>
+                {% endif %}
                 {% endif %}
             </ul>
             <div class="d-flex align-items-center gap-2">

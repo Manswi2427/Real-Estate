@@ -33,5 +33,11 @@ urlpatterns = [
     path('messages/<int:pk>/', views.thread_view, name='thread_view'),
     path('messages/<int:pk>/reply/', views.message_reply_view, name='message_reply'),
     path('messages/<int:pk>/delete/', views.message_delete_view, name='message_delete'),
+
+    # V5 – Bulk Upload & Saved Searches
+    path('properties/bulk-upload/', views.bulk_upload_view, name='bulk_upload'),
+    path('saved-searches/', views.saved_searches_list_view, name='saved_searches'),
+    path('saved-searches/<int:pk>/delete/', views.saved_search_delete_view, name='saved_search_delete'),
 ]
+
 

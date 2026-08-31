@@ -21,12 +21,13 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .filters import PropertyFilter
-from .models import Amenity, Message, Property
+from .models import Amenity, Message, Property, SavedSearch
 from .serializers import (
     AmenitySerializer,
     MessageSerializer,
     PropertyDetailSerializer,
     PropertyListSerializer,
+    SavedSearchSerializer,
 )
 
 
@@ -280,3 +281,26 @@ class UnreadCountAPIView(APIView):
     def get(self, request):
         count = Message.objects.filter(receiver=request.user, is_read=False).count()
         return Response({'unread_count': count})
+
+
+# V5 - Saved Searches
+
+class SavedSearchListCreateAPIView(generics.ListCreateAPIView):
+    """V5 - List and create saved searches for the authenticated user."""
+    serializer_class = SavedSearchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavedSearch.objects.filter(buyer=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(buyer=self.request.user)
+
+
+class SavedSearchDestroyAPIView(generics.DestroyAPIView):
+    """V5 - Delete a saved search for the authenticated user."""
+    serializer_class = SavedSearchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavedSearch.objects.filter(buyer=self.request.user)

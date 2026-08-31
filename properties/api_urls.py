@@ -23,4 +23,7 @@ urlpatterns = [
     path('messages/compose/', api_views.ComposeAPIView.as_view(), name='api_compose'),
     path('messages/unread-count/', api_views.UnreadCountAPIView.as_view(), name='api_unread_count'),
     path('messages/<int:pk>/', api_views.ThreadAPIView.as_view(), name='api_thread'),
+    # V5 – Saved Searches
+    path('saved-searches/', api_views.SavedSearchListCreateAPIView.as_view(), name='api_saved_searches'),
+    path('saved-searches/<int:pk>/', api_views.SavedSearchDestroyAPIView.as_view(), name='api_saved_search_delete'),
 ]

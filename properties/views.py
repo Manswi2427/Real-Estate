@@ -1,3 +1,4 @@
+import csv
 from functools import wraps
 
 from django.contrib import messages
@@ -6,13 +7,18 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q, Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .forms import AmenityForm, MessageComposeForm, MessageReplyForm, PropertyFilterForm, PropertyForm, RegisterForm
-from .models import Amenity, Message, Property, PropertyImage
+from .forms import (
+    AmenityForm, BulkUploadForm, MessageComposeForm, MessageReplyForm,
+    PropertyFilterForm, PropertyForm, RegisterForm, SavedSearchForm
+)
+from .models import Amenity, Message, Property, PropertyImage, SavedSearch
+
 
 
 def agent_required(view_func):
@@ -550,3 +556,193 @@ def message_delete_view(request, pk):
     msg.delete()
     messages.success(request, "Message deleted.")
     return redirect('inbox')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V5 – Bulk Upload & Saved Searches Views
+# ─────────────────────────────────────────────────────────────────────────────
+
+@agent_required
+def bulk_upload_view(request):
+    """
+    Allows agents to bulk-upload property listings using a CSV file.
+    Validates rows, manages transactions, and dynamically links amenities.
+    """
+    if request.method == 'POST':
+        form = BulkUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            csv_file = request.FILES['csv_file']
+            
+            # Read and decode CSV content
+            try:
+                decoded_file = csv_file.read().decode('utf-8-sig').splitlines()
+                reader = csv.DictReader(decoded_file)
+            except Exception as e:
+                messages.error(request, f"Error reading CSV file: {str(e)}")
+                return redirect('bulk_upload')
+
+            # Ensure CSV has columns
+            required_cols = {'title', 'description', 'property_type', 'listing_type', 'price', 'area_sqft'}
+            if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
+                messages.error(
+                    request,
+                    f"Invalid CSV structure. Missing one or more required columns: {required_cols}"
+                )
+                return redirect('bulk_upload')
+
+            row_errors = []
+            created_properties = []
+
+            # Perform parsing in transaction block
+            try:
+                with transaction.atomic():
+                    for idx, row in enumerate(reader, start=1):
+                        errors = []
+                        
+                        # Required fields validation
+                        title = (row.get('title') or '').strip()
+                        description = (row.get('description') or '').strip()
+                        if not title:
+                            errors.append("Title is required.")
+                        if not description:
+                            errors.append("Description is required.")
+
+                        # Choice fields validation
+                        prop_type = (row.get('property_type') or '').strip().upper()
+                        if prop_type not in dict(Property.PropertyType.choices):
+                            errors.append(f"Invalid property_type '{prop_type}'. Choices: {list(dict(Property.PropertyType.choices).keys())}")
+
+                        list_type = (row.get('listing_type') or '').strip().upper()
+                        if list_type not in dict(Property.ListingType.choices):
+                            errors.append(f"Invalid listing_type '{list_type}'. Choices: {list(dict(Property.ListingType.choices).keys())}")
+
+                        status_val = (row.get('status') or 'AVAILABLE').strip().upper()
+                        if status_val not in dict(Property.Status.choices):
+                            errors.append(f"Invalid status '{status_val}'. Choices: {list(dict(Property.Status.choices).keys())}")
+
+                        # Numeric validation
+                        try:
+                            price = float(row.get('price') or 0)
+                            if price <= 0:
+                                errors.append("Price must be positive.")
+                        except ValueError:
+                            errors.append("Price must be a valid number.")
+
+                        try:
+                            area_sqft = float(row.get('area_sqft') or 0)
+                            if area_sqft <= 0:
+                                errors.append("Area must be positive.")
+                        except ValueError:
+                            errors.append("Area must be a valid number.")
+
+                        bedrooms = 0
+                        if row.get('bedrooms'):
+                            try:
+                                bedrooms = int(row['bedrooms'])
+                            except ValueError:
+                                errors.append("Bedrooms must be an integer.")
+
+                        bathrooms = 0
+                        if row.get('bathrooms'):
+                            try:
+                                bathrooms = int(row['bathrooms'])
+                            except ValueError:
+                                errors.append("Bathrooms must be an integer.")
+
+                        # Geolocation / Address optional parsing
+                        address = (row.get('address') or '').strip()
+                        city = (row.get('city') or '').strip()
+                        state = (row.get('state') or '').strip()
+                        zipcode = (row.get('zipcode') or '').strip()
+
+                        latitude = None
+                        if row.get('latitude'):
+                            try:
+                                latitude = float(row['latitude'])
+                            except ValueError:
+                                errors.append("Latitude must be a valid float.")
+
+                        longitude = None
+                        if row.get('longitude'):
+                            try:
+                                longitude = float(row['longitude'])
+                            except ValueError:
+                                errors.append("Longitude must be a valid float.")
+
+                        # If errors found on this row, log them
+                        if errors:
+                            row_errors.append(f"Row {idx} ({title or 'Unnamed'}): " + " | ".join(errors))
+                            continue
+
+                        # Instantiate Property
+                        prop = Property(
+                            title=title,
+                            description=description,
+                            agent=request.user,
+                            property_type=prop_type,
+                            listing_type=list_type,
+                            status=status_val,
+                            price=price,
+                            area_sqft=area_sqft,
+                            bedrooms=bedrooms,
+                            bathrooms=bathrooms,
+                            address=address,
+                            city=city,
+                            state=state,
+                            zipcode=zipcode,
+                            latitude=latitude,
+                            longitude=longitude,
+                        )
+                        prop.save()  # Triggers slugify and post_save matches
+
+                        # Handle comma-separated list of amenities
+                        amenity_names_str = row.get('amenities') or ''
+                        if amenity_names_str:
+                            names = [n.strip() for n in amenity_names_str.split(',') if n.strip()]
+                            for name in names:
+                                amenity_obj, _ = Amenity.objects.get_or_create(
+                                    name=name,
+                                    defaults={'icon': 'fa-solid fa-circle-check'}
+                                )
+                                prop.amenities.add(amenity_obj)
+
+                        created_properties.append(prop)
+
+                    if row_errors:
+                        # Rollback complete transaction by raising Exception
+                        raise Exception("Validation errors in CSV rows.")
+
+            except Exception as e:
+                # If transaction failed due to validation or DB constraint
+                context = {
+                    'form': form,
+                    'errors': row_errors or [f"Transaction aborted: {str(e)}"],
+                }
+                return render(request, 'bulk_upload.html', context)
+
+            messages.success(request, f"Successfully uploaded {len(created_properties)} property listings!")
+            return redirect('property_list')
+    else:
+        form = BulkUploadForm()
+    return render(request, 'bulk_upload.html', {'form': form})
+
+
+@login_required
+def saved_searches_list_view(request):
+    """Lists saved searches of the logged-in buyer."""
+    searches = SavedSearch.objects.filter(buyer=request.user).prefetch_related('amenities')
+    return render(request, 'saved_searches.html', {'saved_searches': searches})
+
+
+@require_POST
+@login_required
+def saved_search_delete_view(request, pk):
+    """Deletes a saved search."""
+    search = get_object_or_404(SavedSearch, pk=pk)
+    if search.buyer_id != request.user.id:
+        messages.error(request, "Permission denied.")
+        return redirect('saved_searches')
+    search.delete()
+    messages.success(request, "Saved search deleted.")
+    return redirect('saved_searches')
+

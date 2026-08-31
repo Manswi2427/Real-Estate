@@ -44,3 +44,45 @@ def promote_new_primary_after_delete(sender, instance, **kwargs):
     else:
         # No images left at all — clear the Property thumbnail field completely
         Property.objects.filter(pk=prop.pk).update(image=None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V5 - Saved Search Notifications
+# ─────────────────────────────────────────────────────────────────────────────
+
+from django.utils import timezone
+from .models import SavedSearch, Message
+
+@receiver(post_save, sender=Property)
+def notify_saved_searches(sender, instance, created, **kwargs):
+    """
+    V5 - When a new property is created, find matching saved searches
+    and send a system message to the buyer.
+    """
+    if not created:
+        return
+        
+    if getattr(instance, 'status', 'active') != 'active':
+        return
+
+    saved_searches = SavedSearch.objects.all()
+    for search in saved_searches:
+        if search.matches_property(instance):
+            subject = f"New property matches your search: {search.name}"
+            body = (
+                f"Hello {search.buyer.username},\n\n"
+                f"A new property '{instance.title}' has just been listed which matches "
+                f"your saved search criteria for '{search.name}'.\n\n"
+                f"Check it out!"
+            )
+            
+            Message.objects.create(
+                sender=instance.owner,
+                receiver=search.buyer,
+                property=instance,
+                subject=subject,
+                body=body
+            )
+            
+            search.last_notified_at = timezone.now()
+            search.save(update_fields=['last_notified_at'])

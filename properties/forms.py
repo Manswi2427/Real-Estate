@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 
-from .models import Amenity, Message, Profile, Property
+from .models import Amenity, Message, Profile, Property, SavedSearch
 
 
 # ─── Custom widget for multiple file upload ───────────────────────────────────
@@ -195,8 +195,9 @@ class MessageComposeForm(forms.ModelForm):
         }
 
 
+
 class MessageReplyForm(forms.Form):
-    """Lightweight reply form used inside a thread view."""
+    """Simple form for replying to a message thread."""
 
     body = forms.CharField(
         label='',
@@ -206,3 +207,32 @@ class MessageReplyForm(forms.Form):
             'placeholder': 'Write your reply…',
         }),
     )
+
+
+# ─ V5 – Bulk Upload & Saved Search Forms ──────────────────────────────────────────────────────
+
+class BulkUploadForm(forms.Form):
+    """CSV Bulk Upload form for agents."""
+    csv_file = forms.FileField(
+        label='Upload CSV File',
+        help_text='Make sure it follows the required column header template.',
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.csv'})
+    )
+
+
+class SavedSearchForm(forms.ModelForm):
+    """Form to save a search filter criteria with a friendly name."""
+    class Meta:
+        model = SavedSearch
+        fields = [
+            'name', 'keyword', 'property_type', 'listing_type', 'city', 'state',
+            'min_price', 'max_price', 'min_area', 'max_area', 'bedrooms', 'bathrooms',
+            'amenities'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g. Mumbai 3 BHK under 2 Crore',
+            })
+        }
+

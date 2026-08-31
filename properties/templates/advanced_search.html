@@ -106,7 +106,12 @@
             <h2 class="section-title mb-1"><i class="fa-solid fa-compass text-primary"></i> Advanced Search Portal</h2>
             <p class="text-muted mb-0">Explore properties with instant filters, custom sorting, and verified amenities.</p>
         </div>
-        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <div class="col-md-4 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end gap-2">
+            {% if user.is_authenticated and user.profile.is_buyer %}
+            <button id="btn-save-search" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#saveSearchModal">
+                <i class="fas fa-bell"></i> Save Search Alerts
+            </button>
+            {% endif %}
             <div class="btn-group" role="group">
                 <button id="btn-grid" class="btn btn-outline-custom active"><i class="fa-solid fa-grip"></i> Grid</button>
                 <button id="btn-list" class="btn btn-outline-custom"><i class="fa-solid fa-list"></i> List</button>
@@ -278,7 +283,37 @@
 {% endblock %}
 
 {% block extra_scripts %}
+
+<!-- Save Search Modal (V5) -->
+<div class="modal fade" id="saveSearchModal" tabindex="-1" aria-labelledby="saveSearchModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="save-search-form">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="saveSearchModalLabel"><i class="fas fa-bell me-2"></i>Save Search Alerts</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Save your current filter criteria. We'll send you a message whenever a new property is listed that matches this search!
+                    </p>
+                    <div class="mb-3">
+                        <label for="search-name" class="form-label fw-bold">Alert Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="search-name" required placeholder="e.g. 2BHK in Bandra under 2Cr">
+                    </div>
+                    <div id="save-search-message" class="d-none alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-search-submit">Save Alerts</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+
     document.addEventListener("DOMContentLoaded", function() {
         const endpoints = {
             suggestions: "/api/properties/suggestions/",
@@ -804,6 +839,84 @@
                 loadingSpinner.style.display = "none";
             }
         };
+
+        
+        // V5 - Save Search Integration
+        const saveSearchForm = document.getElementById('save-search-form');
+        if (saveSearchForm) {
+            saveSearchForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const nameInput = document.getElementById('search-name');
+                const submitBtn = document.getElementById('btn-save-search-submit');
+                const msgBox = document.getElementById('save-search-message');
+                
+                if (!nameInput.value.trim()) return;
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+                msgBox.className = 'alert d-none';
+                
+                const payload = {
+                    name: nameInput.value.trim(),
+                    keyword: currentFilters.keyword || "",
+                    property_type: currentFilters.property_type || "",
+                    listing_type: currentFilters.listing_type || "",
+                    city: currentFilters.city || "",
+                    state: currentFilters.state || "",
+                    min_price: currentFilters.min_price || null,
+                    max_price: currentFilters.max_price || null,
+                    min_area: currentFilters.min_area || null,
+                    max_area: currentFilters.max_area || null,
+                    bedrooms: currentFilters.bedrooms || null,
+                    bathrooms: currentFilters.bathrooms || null,
+                };
+                
+                try {
+                    const response = await fetch('/api/saved-searches/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (response.ok) {
+                        msgBox.className = 'alert alert-success';
+                        msgBox.innerHTML = '<strong>Success!</strong> Search saved. You will be notified of new matches.';
+                        setTimeout(() => {
+                            bootstrap.Modal.getInstance(document.getElementById('saveSearchModal')).hide();
+                            saveSearchForm.reset();
+                            msgBox.className = 'alert d-none';
+                        }, 2000);
+                    } else {
+                        throw new Error('Failed to save search');
+                    }
+                } catch (error) {
+                    msgBox.className = 'alert alert-danger';
+                    msgBox.innerHTML = '<strong>Error!</strong> Could not save search. Please try again.';
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Save Alerts';
+                }
+            });
+        }
+        
+        // Helper to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
 
         // Bootstrap form initialization
         (async function init() {
