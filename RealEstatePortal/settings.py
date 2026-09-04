@@ -106,8 +106,24 @@ WSGI_APPLICATION = 'RealEstatePortal.wsgi.application'
 
 # Database
 # Connect via Railway environment variables (no hardcoded connection URLs)
-# Option 1: Discrete Environment Variables (PGHOST/DB_HOST, PGPORT/DB_PORT, PGUSER/DB_USER, etc.)
-if os.environ.get('DB_HOST') or os.environ.get('PGHOST'):
+# Option 1: MySQL Environment Variables (MYSQLHOST, MYSQLPORT, MYSQLDATABASE, MYSQLUSER, MYSQLPASSWORD)
+if os.environ.get('MYSQLHOST') or os.environ.get('MYSQL_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.environ.get('MYSQLDATABASE') or os.environ.get('MYSQL_DATABASE', 'railway'),
+            'USER': os.environ.get('MYSQLUSER') or os.environ.get('MYSQL_USER', 'root'),
+            'PASSWORD': os.environ.get('MYSQLPASSWORD') or os.environ.get('MYSQL_ROOT_PASSWORD') or os.environ.get('MYSQL_PASSWORD', ''),
+            'HOST': os.environ.get('MYSQLHOST') or os.environ.get('MYSQL_HOST', 'localhost'),
+            'PORT': os.environ.get('MYSQLPORT') or os.environ.get('MYSQL_PORT', '3306'),
+            'CONN_MAX_AGE': 600,
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            },
+        }
+    }
+# Option 2: Discrete PostgreSQL Environment Variables (PGHOST/DB_HOST, PGPORT/DB_PORT, PGUSER/DB_USER, etc.)
+elif os.environ.get('DB_HOST') or os.environ.get('PGHOST'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -119,16 +135,17 @@ if os.environ.get('DB_HOST') or os.environ.get('PGHOST'):
             'CONN_MAX_AGE': 600,
         }
     }
-# Option 2: Railway Reference Variable DATABASE_URL (${{Postgres.DATABASE_URL}})
-elif os.environ.get('DATABASE_URL'):
+# Option 3: Railway Reference Variable DATABASE_URL / MYSQL_URL
+elif os.environ.get('DATABASE_URL') or os.environ.get('MYSQL_URL'):
+    db_conn_url = os.environ.get('DATABASE_URL') or os.environ.get('MYSQL_URL')
     DATABASES = {
         'default': dj_database_url.config(
-            default=os.environ.get('DATABASE_URL'),
+            default=db_conn_url,
             conn_max_age=600,
             conn_health_checks=True,
         )
     }
-# Option 3: Local SQLite fallback when running offline
+# Option 4: Local SQLite fallback when running offline
 else:
     DATABASES = {
         'default': {
