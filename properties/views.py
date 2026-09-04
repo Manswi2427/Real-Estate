@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q, Count
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -54,8 +54,10 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            messages.success(request, f"Welcome to RealEstatePortal, {user.username}!")
+            messages.success(request, f"Welcome to RealEstatePortal, {user.username}! Your account has been created.")
             return redirect('home')
+        else:
+            messages.error(request, "Please fix the highlighted errors below to complete your registration.")
     else:
         form = RegisterForm()
     return render(request, 'register.html', {'form': form})
@@ -63,7 +65,9 @@ def register_view(request):
 
 def _style_auth_form(form):
     form.fields['username'].widget.attrs['class'] = 'form-control'
+    form.fields['username'].widget.attrs['placeholder'] = 'Enter your username'
     form.fields['password'].widget.attrs['class'] = 'form-control'
+    form.fields['password'].widget.attrs['placeholder'] = 'Enter your password'
     return form
 
 
@@ -73,16 +77,14 @@ def login_view(request):
     if request.method == 'POST':
         form = _style_auth_form(AuthenticationForm(request, data=request.POST))
         if form.is_valid():
-            user = authenticate(
-                request,
-                username=form.cleaned_data['username'],
-                password=form.cleaned_data['password'],
-            )
+            user = form.get_user()
             if user is not None:
                 login(request, user)
                 messages.success(request, f"Welcome back, {user.username}!")
-                next_url = request.GET.get('next', 'home')
+                next_url = request.GET.get('next') or request.POST.get('next') or 'home'
                 return redirect(next_url)
+        else:
+            messages.error(request, "Invalid username or password. Please verify your credentials and try again.")
     else:
         form = _style_auth_form(AuthenticationForm())
     return render(request, 'login.html', {'form': form})
@@ -563,6 +565,54 @@ def message_delete_view(request, pk):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @agent_required
+def bulk_upload_sample_csv(request):
+    """Download a pre-formatted CSV template for bulk property listing upload."""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="properties_bulk_upload_template.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'title', 'description', 'property_type', 'listing_type', 'price',
+        'area_sqft', 'bedrooms', 'bathrooms', 'address', 'city', 'state',
+        'zipcode', 'latitude', 'longitude', 'amenities'
+    ])
+    writer.writerow([
+        'Emerald Bay Penthouse',
+        'Stunning panoramic sea view penthouse with private elevator access.',
+        'APARTMENT',
+        'SALE',
+        '35000000',
+        '3200',
+        '4',
+        '4',
+        '45 Marine Lines',
+        'Mumbai',
+        'Maharashtra',
+        '400020',
+        '18.9440',
+        '72.8235',
+        'Swimming Pool, Gym, 24/7 Security, Power Backup, Clubhouse'
+    ])
+    writer.writerow([
+        'Greenfield Luxury Villa',
+        'Spacious contemporary villa surrounded by landscaped private gardens.',
+        'VILLA',
+        'SALE',
+        '21000000',
+        '3800',
+        '5',
+        '5',
+        '12 Whitefield Road',
+        'Bengaluru',
+        'Karnataka',
+        '560066',
+        '12.9698',
+        '77.7500',
+        'Garden, Covered Parking, 24/7 Security, Pet Friendly'
+    ])
+    return response
+
+
+@agent_required
 def bulk_upload_view(request):
     """
     Allows agents to bulk-upload property listings using a CSV file.
@@ -581,12 +631,22 @@ def bulk_upload_view(request):
                 messages.error(request, f"Error reading CSV file: {str(e)}")
                 return redirect('bulk_upload')
 
-            # Ensure CSV has columns
-            required_cols = {'title', 'description', 'property_type', 'listing_type', 'price', 'area_sqft'}
-            if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
+            if not reader.fieldnames:
+                messages.error(request, "Uploaded CSV file is empty.")
+                return redirect('bulk_upload')
+
+            # Normalize header column names to lowercase stripped
+            raw_fieldnames = [f.strip().lower() for f in reader.fieldnames if f]
+            required_cols = {'title', 'description', 'property_type', 'listing_type', 'price'}
+            has_area = ('area_sqft' in raw_fieldnames) or ('area' in raw_fieldnames)
+            
+            if not required_cols.issubset(set(raw_fieldnames)) or not has_area:
+                missing = [c for c in required_cols if c not in raw_fieldnames]
+                if not has_area:
+                    missing.append('area_sqft (or area)')
                 messages.error(
                     request,
-                    f"Invalid CSV structure. Missing one or more required columns: {required_cols}"
+                    f"Invalid CSV structure. Missing required column(s): {', '.join(missing)}"
                 )
                 return redirect('bulk_upload')
 
@@ -598,74 +658,81 @@ def bulk_upload_view(request):
                 with transaction.atomic():
                     for idx, row in enumerate(reader, start=1):
                         errors = []
+                        row_norm = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in row.items() if k}
                         
                         # Required fields validation
-                        title = (row.get('title') or '').strip()
-                        description = (row.get('description') or '').strip()
+                        title = row_norm.get('title') or ''
+                        description = row_norm.get('description') or ''
                         if not title:
                             errors.append("Title is required.")
                         if not description:
                             errors.append("Description is required.")
 
                         # Choice fields validation
-                        prop_type = (row.get('property_type') or '').strip().upper()
-                        if prop_type not in dict(Property.PropertyType.choices):
-                            errors.append(f"Invalid property_type '{prop_type}'. Choices: {list(dict(Property.PropertyType.choices).keys())}")
+                        prop_type = (row_norm.get('property_type') or '').upper()
+                        valid_types = dict(Property.PropertyType.choices)
+                        if prop_type not in valid_types:
+                            errors.append(f"Invalid property_type '{prop_type}'. Choices: {list(valid_types.keys())}")
 
-                        list_type = (row.get('listing_type') or '').strip().upper()
-                        if list_type not in dict(Property.ListingType.choices):
-                            errors.append(f"Invalid listing_type '{list_type}'. Choices: {list(dict(Property.ListingType.choices).keys())}")
+                        list_type = (row_norm.get('listing_type') or '').upper()
+                        valid_listings = dict(Property.ListingType.choices)
+                        if list_type not in valid_listings:
+                            errors.append(f"Invalid listing_type '{list_type}'. Choices: {list(valid_listings.keys())}")
 
-                        status_val = (row.get('status') or 'AVAILABLE').strip().upper()
-                        if status_val not in dict(Property.Status.choices):
-                            errors.append(f"Invalid status '{status_val}'. Choices: {list(dict(Property.Status.choices).keys())}")
+                        status_val = (row_norm.get('status') or 'AVAILABLE').upper()
+                        valid_statuses = dict(Property.Status.choices)
+                        if status_val not in valid_statuses:
+                            errors.append(f"Invalid status '{status_val}'. Choices: {list(valid_statuses.keys())}")
 
                         # Numeric validation
+                        price = 0.0
                         try:
-                            price = float(row.get('price') or 0)
+                            price = float(row_norm.get('price') or 0)
                             if price <= 0:
                                 errors.append("Price must be positive.")
                         except ValueError:
                             errors.append("Price must be a valid number.")
 
+                        area_sqft = 0.0
+                        area_raw = row_norm.get('area_sqft') or row_norm.get('area') or 0
                         try:
-                            area_sqft = float(row.get('area_sqft') or 0)
+                            area_sqft = float(area_raw)
                             if area_sqft <= 0:
                                 errors.append("Area must be positive.")
                         except ValueError:
                             errors.append("Area must be a valid number.")
 
                         bedrooms = 0
-                        if row.get('bedrooms'):
+                        if row_norm.get('bedrooms'):
                             try:
-                                bedrooms = int(row['bedrooms'])
+                                bedrooms = int(row_norm['bedrooms'])
                             except ValueError:
                                 errors.append("Bedrooms must be an integer.")
 
                         bathrooms = 0
-                        if row.get('bathrooms'):
+                        if row_norm.get('bathrooms'):
                             try:
-                                bathrooms = int(row['bathrooms'])
+                                bathrooms = int(row_norm['bathrooms'])
                             except ValueError:
                                 errors.append("Bathrooms must be an integer.")
 
                         # Geolocation / Address optional parsing
-                        address = (row.get('address') or '').strip()
-                        city = (row.get('city') or '').strip()
-                        state = (row.get('state') or '').strip()
-                        zipcode = (row.get('zipcode') or '').strip()
+                        address = row_norm.get('address') or ''
+                        city = row_norm.get('city') or ''
+                        state = row_norm.get('state') or ''
+                        zipcode = row_norm.get('zipcode') or ''
 
                         latitude = None
-                        if row.get('latitude'):
+                        if row_norm.get('latitude'):
                             try:
-                                latitude = float(row['latitude'])
+                                latitude = float(row_norm['latitude'])
                             except ValueError:
                                 errors.append("Latitude must be a valid float.")
 
                         longitude = None
-                        if row.get('longitude'):
+                        if row_norm.get('longitude'):
                             try:
-                                longitude = float(row['longitude'])
+                                longitude = float(row_norm['longitude'])
                             except ValueError:
                                 errors.append("Longitude must be a valid float.")
 
@@ -696,7 +763,7 @@ def bulk_upload_view(request):
                         prop.save()  # Triggers slugify and post_save matches
 
                         # Handle comma-separated list of amenities
-                        amenity_names_str = row.get('amenities') or ''
+                        amenity_names_str = row_norm.get('amenities') or ''
                         if amenity_names_str:
                             names = [n.strip() for n in amenity_names_str.split(',') if n.strip()]
                             for name in names:
@@ -718,20 +785,20 @@ def bulk_upload_view(request):
                     'form': form,
                     'errors': row_errors or [f"Transaction aborted: {str(e)}"],
                 }
-                return render(request, 'bulk_upload.html', context)
+                return render(request, 'properties/bulk_upload.html', context)
 
             messages.success(request, f"Successfully uploaded {len(created_properties)} property listings!")
             return redirect('property_list')
     else:
         form = BulkUploadForm()
-    return render(request, 'bulk_upload.html', {'form': form})
+    return render(request, 'properties/bulk_upload.html', {'form': form})
 
 
 @login_required
 def saved_searches_list_view(request):
     """Lists saved searches of the logged-in buyer."""
     searches = SavedSearch.objects.filter(buyer=request.user).prefetch_related('amenities')
-    return render(request, 'saved_searches.html', {'saved_searches': searches})
+    return render(request, 'properties/saved_searches.html', {'saved_searches': searches})
 
 
 @require_POST

@@ -32,26 +32,57 @@ class MultipleFileField(forms.FileField):
 # ─── Register Form ────────────────────────────────────────────────────────────
 
 class RegisterForm(UserCreationForm):
-    email = forms.EmailField(required=True)
-    role = forms.ChoiceField(choices=Profile.Role.choices, widget=forms.RadioSelect)
-    phone = forms.CharField(max_length=20, required=False)
-    agency_name = forms.CharField(max_length=150, required=False)
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'name@example.com'})
+    )
+    role = forms.ChoiceField(
+        choices=Profile.Role.choices,
+        widget=forms.RadioSelect,
+        initial=Profile.Role.BUYER,
+        required=True
+    )
+    phone = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': '+91 98765 43210'})
+    )
+    agency_name = forms.CharField(
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Skyline Realty (for agents)'})
+    )
 
-    class Meta:
+    class Meta(UserCreationForm.Meta):
         model = User
-        fields = ['username', 'email', 'password1', 'password2', 'role', 'phone', 'agency_name']
+        fields = ('username', 'email')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for name, field in self.fields.items():
             if name != 'role':
-                field.widget.attrs['class'] = 'form-control'
+                existing = field.widget.attrs.get('class', '')
+                field.widget.attrs['class'] = f"{existing} form-control".strip()
+        if 'username' in self.fields:
+            self.fields['username'].widget.attrs['placeholder'] = 'Choose a unique username'
+        if 'password1' in self.fields:
+            self.fields['password1'].widget.attrs['placeholder'] = 'At least 8 characters'
+            self.fields['password1'].help_text = 'At least 8 characters. Cannot be entirely numeric or commonly used.'
+        if 'password2' in self.fields:
+            self.fields['password2'].widget.attrs['placeholder'] = 'Confirm your password'
+            self.fields['password2'].help_text = 'Type the exact same password again.'
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email and User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("An account with this email address already exists.")
+        return email
 
     def save(self, commit=True):
         user = super().save(commit=commit)
         if commit:
             profile, _ = Profile.objects.get_or_create(user=user)
-            profile.role = self.cleaned_data['role']
+            profile.role = self.cleaned_data.get('role', Profile.Role.BUYER)
             profile.phone = self.cleaned_data.get('phone', '')
             profile.agency_name = self.cleaned_data.get('agency_name', '')
             profile.save()
@@ -195,7 +226,6 @@ class MessageComposeForm(forms.ModelForm):
         }
 
 
-
 class MessageReplyForm(forms.Form):
     """Simple form for replying to a message thread."""
 
@@ -235,4 +265,3 @@ class SavedSearchForm(forms.ModelForm):
                 'placeholder': 'e.g. Mumbai 3 BHK under 2 Crore',
             })
         }
-

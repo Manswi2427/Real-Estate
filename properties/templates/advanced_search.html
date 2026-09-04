@@ -869,6 +869,7 @@
                     max_area: currentFilters.max_area || null,
                     bedrooms: currentFilters.bedrooms || null,
                     bathrooms: currentFilters.bathrooms || null,
+                    amenities: currentFilters.amenities || []
                 };
                 
                 try {
@@ -918,9 +919,35 @@
             return cookieValue;
         }
 
+        // Parse query params from URL (e.g. from Saved Searches "Run Search" link)
+        function loadFiltersFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('keyword')) keywordInput.value = params.get('keyword');
+            if (params.get('property_type')) propTypeSelect.value = params.get('property_type');
+            if (params.get('listing_type')) listingTypeSelect.value = params.get('listing_type');
+            if (params.get('status')) statusSelect.value = params.get('status');
+            if (params.get('city')) citySelect.value = params.get('city');
+            if (params.get('min_price')) minPriceInput.value = params.get('min_price');
+            if (params.get('max_price')) maxPriceInput.value = params.get('max_price');
+            if (params.get('min_area')) minAreaInput.value = params.get('min_area');
+            if (params.get('max_area')) maxAreaInput.value = params.get('max_area');
+            if (params.get('bedrooms')) bedroomsSelect.value = params.get('bedrooms');
+            if (params.get('bathrooms')) bathroomsSelect.value = params.get('bathrooms');
+            if (params.get('sort')) sortSelect.value = params.get('sort');
+
+            const urlAmenities = params.getAll('amenities');
+            if (urlAmenities.length > 0) {
+                urlAmenities.forEach(id => {
+                    const cb = document.getElementById(`amenity-${id}`);
+                    if (cb) cb.checked = true;
+                });
+            }
+        }
+
         // Bootstrap form initialization
         (async function init() {
             await initializeFormOptions();
+            loadFiltersFromURL();
             // Perform initial load
             updateFiltersFromUI();
         })();

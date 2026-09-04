@@ -50,39 +50,58 @@ def promote_new_primary_after_delete(sender, instance, **kwargs):
 # V5 - Saved Search Notifications
 # ─────────────────────────────────────────────────────────────────────────────
 
+from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 from .models import SavedSearch, Message
 
 @receiver(post_save, sender=Property)
 def notify_saved_searches(sender, instance, created, **kwargs):
     """
-    V5 - When a new property is created, find matching saved searches
-    and send a system message to the buyer.
+    V5 - When a new property is created, find matching saved searches,
+    send an internal message, and dispatch an email alert to the buyer.
     """
     if not created:
         return
         
-    if getattr(instance, 'status', 'active') != 'active':
+    if instance.status != Property.Status.AVAILABLE:
         return
 
-    saved_searches = SavedSearch.objects.all()
+    saved_searches = SavedSearch.objects.select_related('buyer').prefetch_related('amenities').all()
     for search in saved_searches:
         if search.matches_property(instance):
-            subject = f"New property matches your search: {search.name}"
+            subject = f"Alert: New Property matches your search '{search.name}'"
             body = (
-                f"Hello {search.buyer.username},\n\n"
+                f"Hello {search.buyer.first_name or search.buyer.username},\n\n"
                 f"A new property '{instance.title}' has just been listed which matches "
                 f"your saved search criteria for '{search.name}'.\n\n"
-                f"Check it out!"
+                f"Property Details:\n"
+                f"- Type: {instance.get_property_type_display()} ({instance.get_listing_type_display()})\n"
+                f"- Price: ₹{instance.price}\n"
+                f"- Location: {instance.address}, {instance.city}, {instance.state}\n"
+                f"- Bedrooms: {instance.bedrooms} | Bathrooms: {instance.bathrooms}\n"
+                f"- Area: {instance.area_sqft} sq. ft.\n\n"
+                f"Check it out on RealEstatePortal!"
             )
             
+            # 1. Internal Message
             Message.objects.create(
-                sender=instance.owner,
+                sender=instance.agent,
                 receiver=search.buyer,
                 property=instance,
                 subject=subject,
                 body=body
             )
+            
+            # 2. Email alert
+            if search.buyer.email:
+                send_mail(
+                    subject=subject,
+                    message=body,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@estateportal.com'),
+                    recipient_list=[search.buyer.email],
+                    fail_silently=True,
+                )
             
             search.last_notified_at = timezone.now()
             search.save(update_fields=['last_notified_at'])

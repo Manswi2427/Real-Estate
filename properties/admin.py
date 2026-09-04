@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Amenity, Message, Profile, Property, PropertyAmenity, PropertyImage
+from .models import Amenity, Message, Profile, Property, PropertyAmenity, PropertyImage, SavedSearch
 
 
 class PropertyAmenityInline(admin.TabularInline):
@@ -93,3 +93,12 @@ class MessageAdmin(admin.ModelAdmin):
     @admin.display(description='Reply?', boolean=True)
     def has_parent(self, obj):
         return obj.parent_id is not None
+
+
+@admin.register(SavedSearch)
+class SavedSearchAdmin(admin.ModelAdmin):
+    list_display = ('id', 'buyer', 'name', 'city', 'property_type', 'listing_type', 'min_price', 'max_price', 'created_at', 'last_notified_at')
+    list_filter = ('property_type', 'listing_type', 'created_at')
+    search_fields = ('name', 'buyer__username', 'city', 'keyword')
+    filter_horizontal = ('amenities',)
+    readonly_fields = ('created_at',)

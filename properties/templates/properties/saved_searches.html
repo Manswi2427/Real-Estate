@@ -6,7 +6,7 @@
 <div class="container my-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="mb-0"><i class="fas fa-bookmark me-2 text-primary"></i>My Saved Searches</h2>
-        <a href="{% url 'advanced_search' %}" class="btn btn-primary">
+        <a href="{% url 'property_advanced_search' %}" class="btn btn-primary">
             <i class="fas fa-search me-2"></i>New Search
         </a>
     </div>
@@ -49,10 +49,10 @@
                                     <li class="mb-1"><strong>Location:</strong> {{ search.city }}{% if search.state %}, {{ search.state }}{% endif %}</li>
                                 {% endif %}
                                 {% if search.property_type %}
-                                    <li class="mb-1"><strong>Type:</strong> {{ search.get_property_type_display|default:search.property_type|title }}</li>
+                                    <li class="mb-1"><strong>Type:</strong> {{ search.property_type|title }}</li>
                                 {% endif %}
                                 {% if search.listing_type %}
-                                    <li class="mb-1"><strong>For:</strong> {{ search.get_listing_type_display|default:search.listing_type|title }}</li>
+                                    <li class="mb-1"><strong>For:</strong> {{ search.listing_type|title }}</li>
                                 {% endif %}
                                 {% if search.min_price or search.max_price %}
                                     <li class="mb-1">
@@ -75,8 +75,7 @@
                             </ul>
                         </div>
                         <div class="card-footer bg-light border-top-0 d-grid">
-                            {% url 'advanced_search' as search_url %}
-                            <a href="{{ search_url }}?keyword={{ search.keyword }}&city={{ search.city }}&state={{ search.state }}&property_type={{ search.property_type }}&listing_type={{ search.listing_type }}&min_price={{ search.min_price|default_if_none:'' }}&max_price={{ search.max_price|default_if_none:'' }}&bedrooms={{ search.bedrooms|default_if_none:'' }}" class="btn btn-outline-primary btn-sm">
+                            <a href="{% url 'property_advanced_search' %}?keyword={{ search.keyword }}&city={{ search.city }}&state={{ search.state }}&property_type={{ search.property_type }}&listing_type={{ search.listing_type }}&min_price={{ search.min_price|default_if_none:'' }}&max_price={{ search.max_price|default_if_none:'' }}&bedrooms={{ search.bedrooms|default_if_none:'' }}" class="btn btn-outline-primary btn-sm">
                                 <i class="fas fa-play me-1"></i> Run Search
                             </a>
                         </div>
@@ -91,10 +90,11 @@
             </div>
             <h4 class="text-secondary">No saved searches yet</h4>
             <p class="text-muted">Save your favorite search criteria to get instant alerts on new matching properties.</p>
-            <a href="{% url 'advanced_search' %}" class="btn btn-primary mt-2">
+            <a href="{% url 'property_advanced_search' %}" class="btn btn-primary mt-2">
                 <i class="fas fa-search me-2"></i>Start Searching
             </a>
         </div>
     {% endif %}
 </div>
 {% endblock %}
+

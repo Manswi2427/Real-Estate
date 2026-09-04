@@ -1,55 +1,68 @@
 {% extends "base.html" %}
-{% load widget_tweaks %}
 
 {% block title %}Bulk Upload Properties | Real Estate Portal{% endblock %}
 
 {% block content %}
 <div class="container my-5">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <div class="col-md-9 col-lg-8">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white py-3">
-                    <h4 class="mb-0"><i class="fas fa-file-csv me-2"></i>Bulk Upload Properties</h4>
+                <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="fas fa-file-csv me-2"></i>Bulk Upload Properties (CSV)</h4>
+                    <a href="{% url 'bulk_upload_sample_csv' %}" class="btn btn-light btn-sm fw-semibold">
+                        <i class="fas fa-download me-1 text-success"></i>Download Sample CSV
+                    </a>
                 </div>
                 <div class="card-body p-4">
                     <p class="text-muted mb-4">
-                        Upload a CSV file to create multiple properties at once. 
-                        Make sure your CSV file includes the following columns:
-                        <strong>title, description, price, city, state, address, property_type, listing_type, bedrooms, bathrooms, area, amenities</strong>.
+                        Upload a CSV file to create multiple listings at once. All rows are validated within a database transaction to ensure data integrity.
                     </p>
 
                     {% if messages %}
                         {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
                                 {{ message|linebreaksbr }}
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>
                         {% endfor %}
                     {% endif %}
 
+                    {% if errors %}
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h6 class="fw-bold mb-2"><i class="fas fa-triangle-exclamation me-1"></i> Upload Validation Errors:</h6>
+                            <ul class="mb-0 ps-3">
+                                {% for error in errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endif %}
+
                     <form method="post" enctype="multipart/form-data">
                         {% csrf_token %}
                         
                         <div class="mb-4">
-                            <label for="{{ form.csv_file.id_for_label }}" class="form-label fw-bold">Select CSV File</label>
-                            {% render_field form.csv_file class="form-control" accept=".csv" %}
+                            <label for="{{ form.csv_file.id_for_label }}" class="form-label fw-bold">Select CSV File (.csv)</label>
+                            <input type="file" name="csv_file" id="{{ form.csv_file.id_for_label }}" class="form-control form-control-lg" accept=".csv" required>
                             {% if form.csv_file.errors %}
                                 <div class="invalid-feedback d-block">
                                     {{ form.csv_file.errors|join:", " }}
                                 </div>
                             {% endif %}
-                            <div class="form-text mt-2">
-                                <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#csvFormatModal">
-                                    <i class="fas fa-info-circle me-1"></i>View CSV Format Details
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <small class="text-muted">Maximum file size: 10MB</small>
+                                <a href="#" class="text-decoration-none small fw-semibold" data-bs-toggle="modal" data-bs-target="#csvFormatModal">
+                                    <i class="fas fa-circle-info me-1"></i>View CSV Column Specification
                                 </a>
                             </div>
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-upload me-2"></i>Upload and Process
+                            <button type="submit" class="btn btn-primary-custom btn-lg">
+                                <i class="fas fa-upload me-2"></i>Upload and Process Properties
                             </button>
-                            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                            <a href="{% url 'property_list' %}" class="btn btn-outline-custom">Cancel</a>
                         </div>
                     </form>
                 </div>
@@ -62,42 +75,46 @@
 <div class="modal fade" id="csvFormatModal" tabindex="-1" aria-labelledby="csvFormatModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="csvFormatModalLabel">CSV Format Instructions</h5>
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="csvFormatModalLabel"><i class="fas fa-table me-2 text-primary"></i>CSV Column Specifications</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Your CSV file must include a header row with exactly these column names:</p>
+                <p class="text-muted">Ensure your CSV header contains these columns (column order does not matter):</p>
                 <div class="table-responsive">
-                    <table class="table table-bordered table-sm">
+                    <table class="table table-bordered table-sm align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>Column Name</th>
-                                <th>Description</th>
+                                <th>Required?</th>
+                                <th>Allowed Values / Description</th>
                                 <th>Example</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td>title</td><td>Property title (required)</td><td>Beautiful Villa</td></tr>
-                            <tr><td>description</td><td>Detailed text (optional)</td><td>A nice place...</td></tr>
-                            <tr><td>price</td><td>Numeric price (required)</td><td>5000000</td></tr>
-                            <tr><td>city</td><td>City name (required)</td><td>Mumbai</td></tr>
-                            <tr><td>state</td><td>State name (required)</td><td>Maharashtra</td></tr>
-                            <tr><td>address</td><td>Full address (optional)</td><td>123 Main St</td></tr>
-                            <tr><td>property_type</td><td>apartment, house, commercial, land</td><td>house</td></tr>
-                            <tr><td>listing_type</td><td>sale or rent</td><td>sale</td></tr>
-                            <tr><td>bedrooms</td><td>Number of bedrooms (optional)</td><td>3</td></tr>
-                            <tr><td>bathrooms</td><td>Number of bathrooms (optional)</td><td>2</td></tr>
-                            <tr><td>area</td><td>Area in sq ft (optional)</td><td>1500.50</td></tr>
-                            <tr><td>amenities</td><td>Comma-separated amenity names</td><td>Pool, Gym, Parking</td></tr>
+                            <tr><td><code>title</code></td><td><span class="badge bg-danger">Required</span></td><td>Property Title</td><td>Grand Marina Villa</td></tr>
+                            <tr><td><code>description</code></td><td><span class="badge bg-danger">Required</span></td><td>Detailed text description</td><td>Spacious 4BHK villa...</td></tr>
+                            <tr><td><code>price</code></td><td><span class="badge bg-danger">Required</span></td><td>Positive number in INR</td><td>18500000</td></tr>
+                            <tr><td><code>property_type</code></td><td><span class="badge bg-danger">Required</span></td><td><code>APARTMENT</code>, <code>HOUSE</code>, <code>VILLA</code>, <code>PLOT</code>, <code>COMMERCIAL</code></td><td>VILLA</td></tr>
+                            <tr><td><code>listing_type</code></td><td><span class="badge bg-danger">Required</span></td><td><code>SALE</code> or <code>RENT</code></td><td>SALE</td></tr>
+                            <tr><td><code>area_sqft</code> (or <code>area</code>)</td><td><span class="badge bg-danger">Required</span></td><td>Area in square feet</td><td>2450</td></tr>
+                            <tr><td><code>bedrooms</code></td><td>Optional</td><td>Number of bedrooms (default 0)</td><td>4</td></tr>
+                            <tr><td><code>bathrooms</code></td><td>Optional</td><td>Number of bathrooms (default 0)</td><td>3</td></tr>
+                            <tr><td><code>address</code></td><td>Optional</td><td>Street address</td><td>42 Marine Drive</td></tr>
+                            <tr><td><code>city</code></td><td>Optional</td><td>City name</td><td>Mumbai</td></tr>
+                            <tr><td><code>state</code></td><td>Optional</td><td>State name</td><td>Maharashtra</td></tr>
+                            <tr><td><code>zipcode</code></td><td>Optional</td><td>Postal code</td><td>400020</td></tr>
+                            <tr><td><code>latitude</code></td><td>Optional</td><td>Decimal latitude (for maps)</td><td>18.9438</td></tr>
+                            <tr><td><code>longitude</code></td><td>Optional</td><td>Decimal longitude (for maps)</td><td>72.8232</td></tr>
+                            <tr><td><code>amenities</code></td><td>Optional</td><td>Comma-separated amenity names</td><td>WiFi, Swimming Pool, Gym</td></tr>
                         </tbody>
                     </table>
                 </div>
-                <div class="alert alert-info mt-3 mb-0">
-                    <i class="fas fa-lightbulb me-2"></i> <strong>Tip:</strong> Ensure text fields containing commas (like amenities) are enclosed in quotes (e.g., <code>"Pool, Gym"</code>).
-                </div>
             </div>
             <div class="modal-footer">
+                <a href="{% url 'bulk_upload_sample_csv' %}" class="btn btn-outline-success">
+                    <i class="fas fa-download me-1"></i>Download Template (.csv)
+                </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>

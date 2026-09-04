@@ -211,13 +211,28 @@ class MessageSerializer(serializers.ModelSerializer):
 
 # V5 - Saved Search Serializer
 
+class AmenityIdOrNameRelatedField(serializers.RelatedField):
+    """Accepts either Amenity ID or Amenity Name and serializes as name."""
+    def get_queryset(self):
+        return Amenity.objects.all()
+
+    def to_representation(self, value):
+        return value.name
+
+    def to_internal_value(self, data):
+        try:
+            if isinstance(data, int) or (isinstance(data, str) and str(data).strip().isdigit()):
+                return Amenity.objects.get(pk=int(data))
+            return Amenity.objects.get(name__iexact=str(data).strip())
+        except Amenity.DoesNotExist:
+            raise serializers.ValidationError(f"Amenity '{data}' not found.")
+
+
 class SavedSearchSerializer(serializers.ModelSerializer):
     """V5 - Serializes buyer saved search criteria."""
 
-    amenities = serializers.SlugRelatedField(
+    amenities = AmenityIdOrNameRelatedField(
         many=True,
-        queryset=Amenity.objects.all(),
-        slug_field='name',
         required=False
     )
 

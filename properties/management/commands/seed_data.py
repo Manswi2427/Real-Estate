@@ -63,6 +63,18 @@ class Command(BaseCommand):
     help = "Seeds the database with demo amenities, an agent/buyer account, and sample properties."
 
     def handle(self, *args, **options):
+        # Superuser (Admin for /admin/)
+        admin_user, admin_created = User.objects.get_or_create(
+            username="admin", defaults={"email": "admin@estateportal.demo", "first_name": "System", "last_name": "Admin"}
+        )
+        admin_user.set_password("AdminPass123!")
+        admin_user.is_staff = True
+        admin_user.is_superuser = True
+        admin_user.save()
+        Profile.objects.update_or_create(
+            user=admin_user, defaults={"role": Profile.Role.AGENT, "agency_name": "EstatePortal HQ"}
+        )
+
         # Demo agent
         agent, created = User.objects.get_or_create(
             username="demoagent", defaults={"email": "agent@estateportal.demo", "first_name": "Riya", "last_name": "Sharma"}
